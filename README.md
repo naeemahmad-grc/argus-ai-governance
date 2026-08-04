@@ -1,6 +1,6 @@
 # ARGUS — Agentic AI Governance Platform
 
-**Live demo:** _add your deployment URL here_
+**Live demo: [Launch ARGUS](https://claude.ai/public/artifacts/cef37607-191d-4aae-8c6b-4e58d90736a3) — runs in the browser, no install required.
 
 ARGUS is an MVP exploring what enterprise governance tooling for AI agents should look like: a single control plane to inventory deployed agents, enforce behavioral policies, track violations, and surface risk — before an autonomous agent becomes an incident.
 

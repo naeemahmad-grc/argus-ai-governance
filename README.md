@@ -44,4 +44,4 @@ This is an early exploration and feedback genuinely shapes it — especially fro
 
 ---
 
-Built by Naeem Ahmad · [LinkedIn](www.linkedin.com/in/naeemahmad1)
+Built by Naeem Ahmad · [LinkedIn](https://www.linkedin.com/in/naeemahmad1)

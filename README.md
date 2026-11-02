@@ -8,13 +8,27 @@ ARGUS is an MVP exploring what enterprise governance tooling for AI agents shoul
 
 ## What it does
 
-- **Dashboard** — fleet-level KPIs (active agents, compliance score, critical risk), a Risk Field bubble view where bubble size scales with each agent's risk score, and a live alert feed.
+- **Dashboard** — fleet-level KPIs (active agents, framework coverage, critical risk, control gaps), a Risk Field bubble view where bubble size scales with each agent's risk score, and a live alert feed.
 - **Agent Registry** — directory of all deployed AI agents with model, department, owner, autonomy level, status, and risk. New agents enter as *pending* until security review.
-- **Policy Engine** — governance rules with enforcement actions (BLOCK, REQUIRE APPROVAL, WARN, AUDIT), each mapped to the compliance frameworks it supports (EU AI Act, NIST AI RMF, ISO 42001, ISO 27001, SOC 2, GDPR, HIPAA). Toggling policies recalculates the compliance score.
-- **Audit Trail** — immutable ledger of every platform event with CSV export.
+- **Policy Engine** — governance rules with enforcement actions (BLOCK, REQUIRE APPROVAL, WARN, AUDIT), including AI-specific controls for prompt injection, tool scope, secret leakage, rogue-agent suspension and third-party model vetting. Each policy's framework tags come from the requirement crosswalk.
+- **Frameworks** — requirement-to-control traceability across 14 frameworks. Each requirement shows the policies and platform capabilities that satisfy it; gaps can be closed by enabling a policy or mapping a new one, and coverage updates live.
+- **Audit Trail** — log of every platform event (registrations, policy changes, control mappings, violations) with CSV export.
 - **Risk Radar** — polar view where distance from center is aggregated risk, sectors are departments, and agents drifting past the critical threshold ring pulse for attention. A grid view is available for raw score scanning.
 
 The demo walks through a full governance loop: FinanceBot Alpha commits three critical policy violations in a six-hour window and is automatically suspended, with every step recorded in the audit trail.
+
+## Frameworks covered
+
+| Group | Frameworks |
+|---|---|
+| AI regulation | EU AI Act; US regulatory guidance (Colorado SB 26-189, NYC Local Law 144, sector rules) |
+| AI standards & principles | NIST AI RMF, ISO/IEC 42001, OECD AI Principles |
+| AI security & threats | OWASP Top 10 for LLM Applications (2025), OWASP Top 10 for Agentic Applications (2026), CSA AI Controls Matrix, CSA AI Security Maturity Model, MITRE ATLAS |
+| Security & privacy baseline | ISO/IEC 27001, SOC 2, GDPR, HIPAA |
+
+Each framework lists a curated set of requirements relevant to governing AI agents, not the full text. A requirement counts as covered when an enabled policy or an always-on platform capability maps to it. The catalog lives in `src/frameworks.js`.
+
+The app is responsive: on phones the sidebar becomes a slide-out menu, tables become cards, and the visualizations resize their labels.
 
 ## Why this matters
 
@@ -37,7 +51,6 @@ This is an early exploration and feedback genuinely shapes it — especially fro
 
 ## Roadmap ideas
 
-- Framework coverage view (requirement-to-control traceability per framework)
 - EU AI Act risk-tier classification per agent (prohibited / high-risk / limited / minimal)
 - Risk velocity trails on the radar (direction and speed of score changes)
 - Real enforcement integration via policy-as-code (OPA)

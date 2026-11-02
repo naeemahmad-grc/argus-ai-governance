@@ -1,11 +1,12 @@
-import React, { useState, useMemo, useContext, createContext } from "react";
+import React, { useState, useMemo, useEffect, useContext, createContext } from "react";
 import {
   Shield, Search, Bell, Activity, Users, FileText, AlertTriangle,
   ScanSearch, Cpu, HeartPulse, ShieldAlert, CheckCircle2, Download,
   X, Filter, Plus, Info, AlertOctagon, AlertCircle, Sun, Moon,
-  RotateCcw, MessageCircle, ExternalLink
+  RotateCcw, MessageCircle, ExternalLink, Menu, Layers, Link2, ChevronRight
 } from "lucide-react";
 import * as d3 from "d3";
+import { FRAMEWORKS, FRAMEWORK_GROUPS, CAPABILITIES, SEED_REQ_MAP, computeCoverage, frameworksForPolicy } from "./frameworks.js";
 
 /* ---------------- seed data ---------------- */
 
@@ -20,20 +21,23 @@ const SEED_AGENTS = [
   { id: 8, name: "LegalScan Bot", model: "claude-3-5-sonnet", dept: "Legal", status: "pending", risk: "MEDIUM", score: 38, autonomy: "Supervised", owner: "Legal Ops" },
 ];
 
-const FRAMEWORKS = ["EU AI Act", "NIST AI RMF", "ISO 42001", "ISO 27001", "SOC 2", "GDPR", "HIPAA"];
-
 // TODO: replace with your real form link (Tally / Google Form) before deploying
 const FEEDBACK_URL = "https://tally.so/r/YOUR-FORM-ID";
 
 const SEED_POLICIES = [
-  { id: "p1", tag: "Data Privacy", name: "Block PII Export to External APIs", desc: "Prevents any AI agent from sending personally identifiable information to external third-party APIs without explicit authorization.", action: "BLOCK", violations: 7, enabled: true, frameworks: ["GDPR", "SOC 2"] },
-  { id: "p2", tag: "External Communication", name: "Require Approval for Outbound Emails", desc: "All agent-initiated outbound emails to external domains must receive human approval before sending.", action: "REQUIRE APPROVAL", violations: 3, enabled: true, frameworks: ["EU AI Act", "ISO 42001"] },
-  { id: "p3", tag: "HIPAA", name: "Restrict HIPAA Record Access", desc: "Agents without explicit HIPAA clearance are blocked from accessing health-related records.", action: "BLOCK", violations: 12, enabled: true, frameworks: ["HIPAA"] },
-  { id: "p4", tag: "GDPR", name: "Audit Financial Data Reads", desc: "Log all agent access to financial systems for SOX compliance.", action: "AUDIT", violations: 0, enabled: true, frameworks: ["SOC 2", "ISO 27001"] },
-  { id: "p5", tag: "Access Control", name: "Limit Full-Autonomy Agent Actions", desc: "Agents with full autonomy level require supervisor approval for any write operations.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: ["EU AI Act", "NIST AI RMF", "ISO 42001"] },
-  { id: "p6", tag: "Access Control", name: "Block Admin Privilege Escalation", desc: "Prevents agents from acquiring admin permissions they were not originally granted.", action: "BLOCK", violations: 2, enabled: true, frameworks: ["ISO 27001", "SOC 2"] },
-  { id: "p7", tag: "GDPR", name: "GDPR Data Deletion Compliance", desc: "Ensures agents processing EU customer data respect deletion requests within 72 hours.", action: "AUDIT", violations: 0, enabled: false, frameworks: ["GDPR"] },
-  { id: "p8", tag: "Custom", name: "Rate Limit External API Calls", desc: "Warns when an agent makes more than 1000 external API calls per hour.", action: "WARN", violations: 5, enabled: true, frameworks: ["SOC 2"] },
+  { id: "p1", tag: "Data Privacy", name: "Block PII Export to External APIs", desc: "Prevents any AI agent from sending personally identifiable information to external third-party APIs without explicit authorization.", action: "BLOCK", violations: 7, enabled: true, frameworks: [] },
+  { id: "p2", tag: "External Communication", name: "Require Approval for Outbound Emails", desc: "All agent-initiated outbound emails to external domains must receive human approval before sending.", action: "REQUIRE APPROVAL", violations: 3, enabled: true, frameworks: [] },
+  { id: "p3", tag: "HIPAA", name: "Restrict HIPAA Record Access", desc: "Agents without explicit HIPAA clearance are blocked from accessing health-related records.", action: "BLOCK", violations: 12, enabled: true, frameworks: [] },
+  { id: "p4", tag: "GDPR", name: "Audit Financial Data Reads", desc: "Log all agent access to financial systems for SOX compliance.", action: "AUDIT", violations: 0, enabled: true, frameworks: [] },
+  { id: "p5", tag: "Access Control", name: "Limit Full-Autonomy Agent Actions", desc: "Agents with full autonomy level require supervisor approval for any write operations.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [] },
+  { id: "p6", tag: "Access Control", name: "Block Admin Privilege Escalation", desc: "Prevents agents from acquiring admin permissions they were not originally granted.", action: "BLOCK", violations: 2, enabled: true, frameworks: [] },
+  { id: "p7", tag: "GDPR", name: "GDPR Data Deletion Compliance", desc: "Ensures agents processing EU customer data respect deletion requests within 72 hours.", action: "AUDIT", violations: 0, enabled: false, frameworks: [] },
+  { id: "p8", tag: "Custom", name: "Rate Limit External API Calls", desc: "Warns when an agent makes more than 1000 external API calls per hour.", action: "WARN", violations: 5, enabled: true, frameworks: [] },
+  { id: "p9", tag: "AI Security", name: "Prompt Injection Guardrail", desc: "Screens user input, retrieved documents and tool outputs for injected instructions, and blocks agent actions that originate from untrusted instructions.", action: "BLOCK", violations: 6, enabled: true, frameworks: [] },
+  { id: "p10", tag: "AI Security", name: "Least-Privilege Tool Scope", desc: "Each agent may only call tools on its approved allowlist. Calls outside that scope are held for human approval.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [] },
+  { id: "p11", tag: "AI Security", name: "Block System Prompt and Secret Leakage", desc: "Filters agent responses for system prompt contents, credentials and other secrets before they leave the platform.", action: "BLOCK", violations: 1, enabled: true, frameworks: [] },
+  { id: "p12", tag: "Incident Response", name: "Auto-Suspend Rogue Agents", desc: "Suspends an agent automatically after 3 critical violations within 6 hours and pages its owner. Reinstatement requires review.", action: "BLOCK", violations: 1, enabled: true, frameworks: [] },
+  { id: "p13", tag: "Third-Party Risk", name: "Vet Third-Party Models and Tools", desc: "New model providers, plugins and MCP tools must pass a security and provenance review before any agent can use them.", action: "REQUIRE APPROVAL", violations: 0, enabled: true, frameworks: [] },
 ];
 
 const SEED_AUDIT = [
@@ -132,6 +136,33 @@ const THEMES = {
 
 const ThemeCtx = createContext(THEMES.dark);
 const useT = () => useContext(ThemeCtx);
+
+const useIsMobile = (bp = 820) => {
+  const query = `(max-width: ${bp}px)`;
+  const get = () => typeof window !== "undefined" && window.matchMedia(query).matches;
+  const [mobile, setMobile] = useState(get);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = e => setMobile(e.matches);
+    setMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+  return mobile;
+};
+
+const PageHeader = ({ title, subtitle, children }) => {
+  const T = useT();
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ minWidth: 0 }}>
+        <h1 style={{ fontSize: T.mobile ? 22 : 26, fontWeight: 800, margin: 0 }}>{title}</h1>
+        <div style={{ color: T.dim, marginTop: 6, fontSize: 14, lineHeight: 1.5 }}>{subtitle}</div>
+      </div>
+      {children && <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>{children}</div>}
+    </div>
+  );
+};
 
 const fieldStyle = T => ({
   width: "100%", boxSizing: "border-box", background: T.panelSoft,
@@ -234,7 +265,7 @@ function RegisterAgentModal({ onClose, onRegister }) {
           <label style={labelStyle(T)}>Agent name</label>
           <input style={fieldStyle(T)} value={f.name} onChange={e => set("name", e.target.value)} placeholder="e.g. ContractDraft AI" />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "1fr" : "1fr 1fr", gap: 14 }}>
           <div>
             <label style={labelStyle(T)}>Model</label>
             <select style={fieldStyle(T)} value={f.model} onChange={e => set("model", e.target.value)}>
@@ -248,7 +279,7 @@ function RegisterAgentModal({ onClose, onRegister }) {
             </select>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "1fr" : "1fr 1fr", gap: 14 }}>
           <div>
             <label style={labelStyle(T)}>Autonomy level</label>
             <select style={fieldStyle(T)} value={f.autonomy} onChange={e => set("autonomy", e.target.value)}>
@@ -297,7 +328,7 @@ function CreatePolicyModal({ onClose, onCreate }) {
           <label style={labelStyle(T)}>Policy name</label>
           <input style={fieldStyle(T)} value={f.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Require Model Card Before Activation" />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "1fr" : "1fr 1fr", gap: 14 }}>
           <div>
             <label style={labelStyle(T)}>Category</label>
             <select style={fieldStyle(T)} value={f.tag} onChange={e => set("tag", e.target.value)}>
@@ -319,7 +350,7 @@ function CreatePolicyModal({ onClose, onCreate }) {
         <div>
           <label style={labelStyle(T)}>Framework mapping</label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {FRAMEWORKS.map(fw => {
+            {FRAMEWORKS.map(fw => fw.short).map(fw => {
               const on = f.frameworks.includes(fw);
               return (
                 <button key={fw} onClick={() => toggleFw(fw)} style={{
@@ -349,12 +380,10 @@ function CreatePolicyModal({ onClose, onCreate }) {
 
 /* ---------------- views ---------------- */
 
-function Dashboard({ agents, policies, openAgent }) {
+function Dashboard({ agents, coverage, openAgent, onOpenFrameworks }) {
   const T = useT();
   const active = agents.filter(a => a.status === "active").length;
   const suspended = agents.filter(a => a.status === "suspended").length;
-  const activePolicies = policies.filter(p => p.enabled).length;
-  const compliance = Math.min(100, Math.round((activePolicies / policies.length) * 86));
   const critical = agents.filter(a => a.risk === "CRITICAL").length;
 
   const dist = ["LOW", "MEDIUM", "HIGH", "CRITICAL"].map(k => ({
@@ -368,31 +397,33 @@ function Dashboard({ agents, policies, openAgent }) {
 
   const kpis = [
     { label: "Active Agents", value: `${active} / ${agents.length}`, sub: `${suspended} suspended`, icon: <Cpu size={18} color={T.blue} />, color: T.text },
-    { label: "Compliance Score", value: `${compliance}%`, sub: `Based on ${activePolicies} active policies`, icon: <HeartPulse size={18} color={green} />, color: green },
+    { label: "Compliance Score", value: `${coverage.pct}%`, sub: `${coverage.covered} of ${coverage.total} framework requirements covered`, icon: <HeartPulse size={18} color={green} />, color: green },
     { label: "Critical Risk", value: critical, sub: "Agents requiring immediate review", icon: <ShieldAlert size={18} color={red} />, color: red },
-    { label: "Policy Violations", value: 0, sub: "Violations in the last 24 hours", icon: <CheckCircle2 size={18} color={amber} />, color: amber },
+    { label: "Control Gaps", value: coverage.gaps, sub: `Across ${coverage.frameworks.length} frameworks`, icon: <AlertTriangle size={18} color={amber} />, color: amber },
   ];
 
+  const pad = T.mobile ? 16 : 22;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: T.mobile ? 14 : 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${T.mobile ? 150 : 210}px, 1fr))`, gap: T.mobile ? 10 : 16 }}>
         {kpis.map(k => (
-          <Card key={k.label} style={{ padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <span style={{ color: T.dim, fontSize: 14 }}>{k.label}</span>{k.icon}
+          <Card key={k.label} style={{ padding: T.mobile ? 14 : 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: T.mobile ? 8 : 14, gap: 6 }}>
+              <span style={{ color: T.dim, fontSize: T.mobile ? 12.5 : 14 }}>{k.label}</span>{k.icon}
             </div>
-            <div style={{ fontSize: 30, fontWeight: 700, color: k.color, marginBottom: 6 }}>{k.value}</div>
-            <div style={{ color: T.faint, fontSize: 13 }}>{k.sub}</div>
+            <div style={{ fontSize: T.mobile ? 24 : 30, fontWeight: 700, color: k.color, marginBottom: 6 }}>{k.value}</div>
+            <div style={{ color: T.faint, fontSize: T.mobile ? 11.5 : 13, lineHeight: 1.4 }}>{k.sub}</div>
           </Card>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr)", gap: 20 }}>
-        <Card style={{ padding: 22 }}>
+      <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "minmax(0,1fr)" : "minmax(0,1.4fr) minmax(0,1fr)", gap: T.mobile ? 14 : 20 }}>
+        <Card style={{ padding: pad }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
             <div>
               <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Risk Field</div>
-              <div style={{ color: T.dim, fontSize: 13 }}>Bubble size scales with risk score — the biggest risks take up the most room. Click to inspect.</div>
+              <div style={{ color: T.dim, fontSize: 13 }}>Bubble size scales with risk score. Tap a bubble to inspect.</div>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {dist.map(d => (
@@ -406,7 +437,7 @@ function Dashboard({ agents, policies, openAgent }) {
           <RiskBubbles agents={agents} openAgent={openAgent} />
         </Card>
 
-        <Card style={{ padding: 22, display: "flex", flexDirection: "column" }}>
+        <Card style={{ padding: pad, display: "flex", flexDirection: "column" }}>
           <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Recent Alerts</div>
           <div style={{ color: T.dim, fontSize: 13, marginBottom: 14 }}>Latest high-priority events requiring attention.</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
@@ -425,6 +456,42 @@ function Dashboard({ agents, policies, openAgent }) {
           </div>
         </Card>
       </div>
+
+      <Card style={{ padding: pad }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Framework Coverage</div>
+            <div style={{ color: T.dim, fontSize: 13 }}>Share of mapped requirements with an active control.</div>
+          </div>
+          <button onClick={onOpenFrameworks} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: T.blue, fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+            View all frameworks <ChevronRight size={15} />
+          </button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${T.mobile ? 220 : 250}px, 1fr))`, gap: "12px 24px" }}>
+          {coverage.frameworks.filter(f => f.group !== "baseline").map(f => (
+            <CoverageBar key={f.id} label={f.short} covered={f.covered} total={f.total} pct={f.pct} />
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+const coverageColor = (T, pct) =>
+  pct >= 80 ? (T.isDark ? "#34d399" : "#059669") : pct >= 60 ? (T.isDark ? "#f59e0b" : "#b45309") : (T.isDark ? "#f43f5e" : "#e11d48");
+
+function CoverageBar({ label, covered, total, pct }) {
+  const T = useT();
+  const c = coverageColor(T, pct);
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6, gap: 8 }}>
+        <span style={{ fontWeight: 600 }}>{label}</span>
+        <span style={{ color: T.dim, whiteSpace: "nowrap" }}>{covered}/{total} · <span style={{ color: c, fontWeight: 700 }}>{pct}%</span></span>
+      </div>
+      <div style={{ height: 7, borderRadius: 99, background: T.panelSoft, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: c, borderRadius: 99, transition: "width .3s" }} />
+      </div>
     </div>
   );
 }
@@ -439,20 +506,14 @@ function Registry({ agents, openAgent, onOpenRegister }) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Agent Registry</h1>
-          <div style={{ color: T.dim, marginTop: 6, fontSize: 14 }}>Directory of all deployed AI agents across the enterprise.</div>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button style={{ display: "flex", alignItems: "center", gap: 8, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 8, padding: "9px 16px", fontSize: 14, cursor: "pointer" }}>
-            <Filter size={15} /> Filters
-          </button>
-          <button onClick={onOpenRegister} style={{ display: "flex", alignItems: "center", gap: 8, background: T.blue, border: "none", color: "#fff", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-            Register Agent
-          </button>
-        </div>
-      </div>
+      <PageHeader title="Agent Registry" subtitle="Directory of all deployed AI agents across the enterprise.">
+        <button style={{ display: "flex", alignItems: "center", gap: 8, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 8, padding: "9px 16px", fontSize: 14, cursor: "pointer" }}>
+          <Filter size={15} /> Filters
+        </button>
+        <button onClick={onOpenRegister} style={{ display: "flex", alignItems: "center", gap: 8, background: T.blue, border: "none", color: "#fff", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          <Plus size={16} /> Register Agent
+        </button>
+      </PageHeader>
 
       <div style={{ position: "relative", maxWidth: 560, margin: "18px 0" }}>
         <Search size={16} color={T.faint} style={{ position: "absolute", left: 14, top: 12, zIndex: 1 }} />
@@ -460,67 +521,89 @@ function Registry({ agents, openAgent, onOpenRegister }) {
           style={{ ...fieldStyle(T), background: T.panel, borderRadius: 10, padding: "11px 14px 11px 40px" }} />
       </div>
 
-      <Card style={{ overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
-            <thead>
-              <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 13, textAlign: "left" }}>
-                {["Agent Name", "Department", "Status", "Risk Level", ""].map((h, i) => (
-                  <th key={i} style={{ padding: "13px 18px", fontWeight: 600 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(a => {
-                const r = T.risk[a.risk], s = T.status[a.status];
-                return (
-                  <tr key={a.id} style={{ borderTop: `1px solid ${T.border}` }}>
-                    <td style={{ padding: "14px 18px" }}>
-                      <div style={{ fontWeight: 600, fontSize: 15 }}>{a.name}</div>
-                      <div style={{ color: T.faint, fontSize: 12.5, marginTop: 2 }}>{a.model}</div>
-                    </td>
-                    <td style={{ padding: "14px 18px", fontSize: 14 }}>{a.dept}</td>
-                    <td style={{ padding: "14px 18px" }}><Pill fg={s.fg} bg={s.bg} border={s.border}>{a.status}</Pill></td>
-                    <td style={{ padding: "14px 18px" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        {a.risk === "CRITICAL" && <ShieldAlert size={14} color={r.fg} />}
-                        <Pill fg={r.fg} bg={r.bg} border={r.border}>{a.risk}</Pill>
-                      </span>
-                    </td>
-                    <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                      <button onClick={() => openAgent(a.name)} style={{ background: "none", border: "none", color: T.blue, fontSize: 14, cursor: "pointer", fontWeight: 500 }}>View Details</button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr><td colSpan={5} style={{ padding: 28, textAlign: "center", color: T.faint }}>No agents match "{q}". Clear the search to see all agents.</td></tr>
-              )}
-            </tbody>
-          </table>
+      {filtered.length === 0 && (
+        <Card style={{ padding: 28, textAlign: "center", color: T.faint }}>No agents match "{q}". Clear the search to see all agents.</Card>
+      )}
+
+      {T.mobile ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map(a => {
+            const r = T.risk[a.risk], s = T.status[a.status];
+            return (
+              <Card key={a.id} onClick={() => openAgent(a.name)} style={{ padding: "14px 16px", cursor: "pointer" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>{a.name}</div>
+                    <div style={{ color: T.faint, fontSize: 12.5, marginTop: 2 }}>{a.dept} · {a.model}</div>
+                  </div>
+                  <ChevronRight size={18} color={T.faint} style={{ flexShrink: 0, marginTop: 2 }} />
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center" }}>
+                  <Pill fg={s.fg} bg={s.bg} border={s.border}>{a.status}</Pill>
+                  <Pill fg={r.fg} bg={r.bg} border={r.border}>{a.risk}</Pill>
+                </div>
+              </Card>
+            );
+          })}
         </div>
-      </Card>
+      ) : filtered.length > 0 && (
+        <Card style={{ overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+              <thead>
+                <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 13, textAlign: "left" }}>
+                  {["Agent Name", "Department", "Status", "Risk Level", ""].map((h, i) => (
+                    <th key={i} style={{ padding: "13px 18px", fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(a => {
+                  const r = T.risk[a.risk], s = T.status[a.status];
+                  return (
+                    <tr key={a.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                      <td style={{ padding: "14px 18px" }}>
+                        <div style={{ fontWeight: 600, fontSize: 15 }}>{a.name}</div>
+                        <div style={{ color: T.faint, fontSize: 12.5, marginTop: 2 }}>{a.model}</div>
+                      </td>
+                      <td style={{ padding: "14px 18px", fontSize: 14 }}>{a.dept}</td>
+                      <td style={{ padding: "14px 18px" }}><Pill fg={s.fg} bg={s.bg} border={s.border}>{a.status}</Pill></td>
+                      <td style={{ padding: "14px 18px" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          {a.risk === "CRITICAL" && <ShieldAlert size={14} color={r.fg} />}
+                          <Pill fg={r.fg} bg={r.bg} border={r.border}>{a.risk}</Pill>
+                        </span>
+                      </td>
+                      <td style={{ padding: "14px 18px", textAlign: "right" }}>
+                        <button onClick={() => openAgent(a.name)} style={{ background: "none", border: "none", color: T.blue, fontSize: 14, cursor: "pointer", fontWeight: 500 }}>View Details</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
 
-function PolicyEngine({ policies, toggle, onOpenCreate }) {
+function PolicyEngine({ policies, reqMap, toggle, onOpenCreate }) {
   const T = useT();
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Policy Engine</h1>
-          <div style={{ color: T.dim, marginTop: 6, fontSize: 14 }}>Define and manage governance rules for AI agent behavior.</div>
-        </div>
+      <PageHeader title="Policy Engine" subtitle="Define and manage governance rules for AI agent behavior. Framework tags come from the requirement crosswalk.">
         <button onClick={onOpenCreate} style={{ display: "flex", alignItems: "center", gap: 8, background: T.blue, border: "none", color: "#fff", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
           <Plus size={16} /> Create Policy
         </button>
-      </div>
+      </PageHeader>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16, marginTop: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: T.mobile ? 12 : 16, marginTop: 20 }}>
         {policies.map(p => {
           const a = T.action[p.action];
+          const fws = frameworksForPolicy(p, reqMap);
+          const shown = fws.slice(0, 5);
           return (
             <Card key={p.id} style={{ display: "flex", flexDirection: "column", opacity: p.enabled ? 1 : 0.6, transition: "opacity .15s" }}>
               <div style={{ padding: "18px 18px 14px", flex: 1 }}>
@@ -530,15 +613,18 @@ function PolicyEngine({ policies, toggle, onOpenCreate }) {
                 </div>
                 <div style={{ fontSize: 16.5, fontWeight: 700, marginBottom: 8, lineHeight: 1.3 }}>{p.name}</div>
                 <div style={{ color: T.dim, fontSize: 13.5, lineHeight: 1.5 }}>{p.desc}</div>
-                {p.frameworks?.length > 0 && (
+                {fws.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
-                    {p.frameworks.map(fw => (
+                    {shown.map(fw => (
                       <Pill key={fw} small fg={T.blue} bg={T.blueSoft} border={T.blueBorder}>{fw}</Pill>
                     ))}
+                    {fws.length > shown.length && (
+                      <Pill small fg={T.dim} bg={T.panelSoft} border={T.border}>+{fws.length - shown.length} more</Pill>
+                    )}
                   </div>
                 )}
               </div>
-              <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <Pill fg={a.fg} bg={a.bg}>Action: {p.action}</Pill>
                 <span style={{ color: T.dim, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
                   <Shield size={13} /> {p.violations} Violations
@@ -566,46 +652,243 @@ function AuditTrail({ audit }) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Audit Trail</h1>
-          <div style={{ color: T.dim, marginTop: 6, fontSize: 14 }}>Immutable ledger of all platform events and governance actions.</div>
-        </div>
+      <PageHeader title="Audit Trail" subtitle="Ledger of platform events and governance actions.">
         <button onClick={exportCsv} style={{ display: "flex", alignItems: "center", gap: 8, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 8, padding: "9px 16px", fontSize: 14, cursor: "pointer" }}>
           <Download size={15} /> Export CSV
         </button>
+      </PageHeader>
+
+      {T.mobile ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+          {audit.map((e, i) => (
+            <Card key={i} style={{ padding: "13px 14px", display: "flex", gap: 10 }}>
+              <div style={{ marginTop: 2 }}><SevDot sev={e.sev} size={15} /></div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+                  <Pill small fg={T.text} bg={T.panelSoft} border={T.border}>{e.type}</Pill>
+                  <span style={{ fontWeight: 600, fontSize: 13.5 }}>{e.agent}</span>
+                </div>
+                <div style={{ fontSize: 13.5, lineHeight: 1.45 }}>{e.desc}</div>
+                <div style={{ color: T.faint, fontSize: 11.5, marginTop: 6, fontFamily: "ui-monospace, monospace" }}>{e.ts}</div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card style={{ marginTop: 20, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
+              <thead>
+                <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 13, textAlign: "left" }}>
+                  {["", "Timestamp", "Event Type", "Agent", "Description"].map((h, i) => (
+                    <th key={i} style={{ padding: "13px 16px", fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {audit.map((e, i) => (
+                  <tr key={i} style={{ borderTop: `1px solid ${T.border}` }}>
+                    <td style={{ padding: "13px 16px", width: 20 }}><SevDot sev={e.sev} /></td>
+                    <td style={{ padding: "13px 16px", fontFamily: "ui-monospace, monospace", fontSize: 13, color: T.dim, whiteSpace: "nowrap" }}>{e.ts}</td>
+                    <td style={{ padding: "13px 16px" }}><Pill fg={T.text} bg={T.panelSoft} border={T.border}>{e.type}</Pill></td>
+                    <td style={{ padding: "13px 16px", fontWeight: 600, fontSize: 14, whiteSpace: "nowrap" }}>{e.agent}</td>
+                    <td style={{ padding: "13px 16px", fontSize: 14, color: T.text }}>{e.desc}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- frameworks ---------------- */
+
+function Frameworks({ coverage, onOpen }) {
+  const T = useT();
+  const [group, setGroup] = useState("all");
+  const list = coverage.frameworks.filter(f => group === "all" || f.group === group);
+
+  const summary = [
+    { label: "Overall coverage", value: `${coverage.pct}%`, color: coverageColor(T, coverage.pct) },
+    { label: "Frameworks tracked", value: coverage.frameworks.length, color: T.text },
+    { label: "Requirements mapped", value: coverage.total, color: T.text },
+    { label: "Open gaps", value: coverage.gaps, color: T.isDark ? "#f59e0b" : "#b45309" },
+  ];
+
+  return (
+    <div>
+      <PageHeader title="Frameworks" subtitle="Requirement-to-control traceability across AI regulations, standards and threat frameworks. Open a framework to see which policies satisfy each requirement and to close gaps." />
+
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${T.mobile ? 140 : 180}px, 1fr))`, gap: T.mobile ? 10 : 14, marginTop: 20 }}>
+        {summary.map(s => (
+          <Card key={s.label} style={{ padding: T.mobile ? "12px 14px" : "16px 18px" }}>
+            <div style={{ color: T.dim, fontSize: 12.5 }}>{s.label}</div>
+            <div style={{ fontSize: T.mobile ? 22 : 26, fontWeight: 800, color: s.color, marginTop: 4 }}>{s.value}</div>
+          </Card>
+        ))}
       </div>
 
-      <Card style={{ marginTop: 20, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
-            <thead>
-              <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 13, textAlign: "left" }}>
-                {["", "Timestamp", "Event Type", "Agent", "Description"].map((h, i) => (
-                  <th key={i} style={{ padding: "13px 16px", fontWeight: 600 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {audit.map((e, i) => (
-                <tr key={i} style={{ borderTop: `1px solid ${T.border}` }}>
-                  <td style={{ padding: "13px 16px", width: 20 }}><SevDot sev={e.sev} /></td>
-                  <td style={{ padding: "13px 16px", fontFamily: "ui-monospace, monospace", fontSize: 13, color: T.dim, whiteSpace: "nowrap" }}>{e.ts}</td>
-                  <td style={{ padding: "13px 16px" }}><Pill fg={T.text} bg={T.panelSoft} border={T.border}>{e.type}</Pill></td>
-                  <td style={{ padding: "13px 16px", fontWeight: 600, fontSize: 14, whiteSpace: "nowrap" }}>{e.agent}</td>
-                  <td style={{ padding: "13px 16px", fontSize: 14, color: T.text }}>{e.desc}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div style={{ display: "flex", gap: 8, flexWrap: T.mobile ? "nowrap" : "wrap", overflowX: "auto", margin: "20px 0 16px", paddingBottom: 2 }}>
+        {[{ id: "all", label: "All" }, ...FRAMEWORK_GROUPS].map(g => (
+          <button key={g.id} onClick={() => setGroup(g.id)} style={{
+            fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap",
+            background: group === g.id ? T.blue : T.panel, color: group === g.id ? "#fff" : T.dim,
+            border: `1px solid ${group === g.id ? T.blue : T.border}`,
+          }}>{g.label}</button>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(290px, 100%), 1fr))", gap: T.mobile ? 12 : 16 }}>
+        {list.map(f => {
+          const gaps = f.total - f.covered;
+          const level = Math.max(1, Math.min(5, 1 + Math.round((f.pct / 100) * 4)));
+          return (
+            <Card key={f.id} onClick={() => onOpen(f.id)} style={{ padding: 18, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                <Pill small fg={T.dim} bg={T.panelSoft} border={T.border}>{FRAMEWORK_GROUPS.find(g => g.id === f.group).label}</Pill>
+                <ChevronRight size={17} color={T.faint} />
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3 }}>{f.name}</div>
+                <div style={{ color: T.faint, fontSize: 12.5, marginTop: 3, lineHeight: 1.4 }}>{f.source}</div>
+              </div>
+              <div style={{ marginTop: "auto" }}>
+                <CoverageBar label={f.maturity ? `Indicative level ${level} of 5` : "Coverage"} covered={f.covered} total={f.total} pct={f.pct} />
+                <div style={{ color: gaps ? (T.isDark ? "#f59e0b" : "#b45309") : T.faint, fontSize: 12.5, marginTop: 8 }}>
+                  {gaps ? `${gaps} open gap${gaps > 1 ? "s" : ""}` : "No open gaps"}
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div style={{ color: T.faint, fontSize: 12, marginTop: 18, lineHeight: 1.5 }}>
+        Each framework shows a curated set of requirements relevant to governing AI agents, not the full text. Coverage counts a requirement once any enabled policy or always-on platform capability maps to it.
+      </div>
+    </div>
+  );
+}
+
+function FrameworkDrawer({ framework, policies, onClose, onLink, onTogglePolicy }) {
+  const T = useT();
+  const [linking, setLinking] = useState(null);
+  if (!framework) return null;
+  const f = framework;
+  const byId = Object.fromEntries(policies.map(p => [p.id, p]));
+  const green = T.isDark ? "#34d399" : "#059669";
+  const amber = T.isDark ? "#f59e0b" : "#b45309";
+  const level = Math.max(1, Math.min(5, 1 + Math.round((f.pct / 100) * 4)));
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: T.overlay, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: "min(560px, 100%)", height: "100%", background: T.panel, borderLeft: `1px solid ${T.border}`,
+        padding: T.mobile ? 18 : 26, overflowY: "auto", boxSizing: "border-box",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.25 }}>{f.name}</div>
+            <div style={{ color: T.faint, fontSize: 13, marginTop: 4 }}>{f.source}</div>
+          </div>
+          <button onClick={onClose} aria-label="Close framework" style={{ background: "none", border: "none", color: T.dim, cursor: "pointer", flexShrink: 0 }}><X size={20} /></button>
         </div>
-      </Card>
+
+        <div style={{ margin: "18px 0" }}>
+          <CoverageBar label={f.maturity ? `Indicative level ${level} of 5` : "Coverage"} covered={f.covered} total={f.total} pct={f.pct} />
+        </div>
+
+        {f.note && (
+          <div style={{ display: "flex", gap: 10, background: T.blueSoft, border: `1px solid ${T.blueBorder}`, borderRadius: 10, padding: "12px 14px", marginBottom: 18 }}>
+            <Info size={15} color={T.blue} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div style={{ fontSize: 13, lineHeight: 1.55, color: T.text }}>{f.note}</div>
+          </div>
+        )}
+
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Requirements</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {f.reqs.map(req => {
+            const linkedPolicies = req.refs.filter(x => !x.startsWith("cap:")).map(x => byId[x]).filter(Boolean);
+            const caps = req.refs.filter(x => x.startsWith("cap:")).map(x => CAPABILITIES[x.slice(4)]);
+            const disabledOnly = !req.covered && linkedPolicies.length > 0;
+            const linkable = policies.filter(p => !req.refs.includes(p.id));
+            return (
+              <div key={req.key} style={{ background: T.panelSoft, border: `1px solid ${req.covered ? T.border : (T.isDark ? "rgba(245,158,11,.35)" : "rgba(180,83,9,.3)")}`, borderRadius: 10, padding: "12px 14px" }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  {req.covered
+                    ? <CheckCircle2 size={16} color={green} style={{ flexShrink: 0, marginTop: 2 }} />
+                    : <AlertCircle size={16} color={amber} style={{ flexShrink: 0, marginTop: 2 }} />}
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: T.blue, fontFamily: "ui-monospace, monospace" }}>{req.id}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4, marginTop: 2 }}>{req.title}</div>
+
+                    {(caps.length > 0 || linkedPolicies.length > 0) && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                        {caps.map(c => <Pill key={c} small fg={T.dim} bg={T.panel} border={T.border}>{c}</Pill>)}
+                        {linkedPolicies.map(p => (
+                          <Pill key={p.id} small fg={p.enabled ? T.blue : T.faint} bg={p.enabled ? T.blueSoft : T.panel} border={p.enabled ? T.blueBorder : T.border}>
+                            {p.name}{p.enabled ? "" : " (off)"}
+                          </Pill>
+                        ))}
+                      </div>
+                    )}
+
+                    {!req.covered && (
+                      <div style={{ fontSize: 12.5, color: amber, marginTop: 8, lineHeight: 1.45 }}>
+                        {disabledOnly ? "Gap: the mapped policy is disabled." : "Gap: no control mapped yet."}
+                      </div>
+                    )}
+
+                    {!req.covered && (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                        {disabledOnly && linkedPolicies.filter(p => !p.enabled).map(p => (
+                          <button key={p.id} onClick={() => onTogglePolicy(p.id)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: T.blue, color: "#fff", border: "none" }}>
+                            Enable {p.name}
+                          </button>
+                        ))}
+                        {linking === req.key ? (
+                          <select autoFocus defaultValue="" onChange={e => { if (e.target.value) { onLink(req.key, e.target.value); setLinking(null); } }}
+                            onBlur={() => setLinking(null)}
+                            style={{ ...fieldStyle(T), width: "auto", maxWidth: "100%", padding: "6px 8px", fontSize: 13, background: T.panel }}>
+                            <option value="" disabled>Choose a policy to map…</option>
+                            {linkable.map(p => <option key={p.id} value={p.id}>{p.name}{p.enabled ? "" : " (disabled)"}</option>)}
+                          </select>
+                        ) : (
+                          <button onClick={() => setLinking(req.key)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: "transparent", color: T.blue, border: `1px solid ${T.blueBorder}` }}>
+                            <Link2 size={13} /> Map a policy
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {f.tagged.length > 0 && (
+          <>
+            <div style={{ fontSize: 15, fontWeight: 700, margin: "22px 0 10px" }}>Also tagged to this framework</div>
+            <div style={{ color: T.dim, fontSize: 13, marginBottom: 10, lineHeight: 1.5 }}>
+              These policies were tagged when created but are not mapped to a specific requirement, so they don't count toward coverage yet.
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {f.tagged.map(p => <Pill key={p.id} small fg={T.blue} bg={T.blueSoft} border={T.blueBorder}>{p.name}</Pill>)}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
 function RiskBubbles({ agents, openAgent }) {
   const T = useT();
+  const fs = T.mobile ? 1.6 : 1;
   const tier = s => s >= 80 ? "CRITICAL" : s >= 55 ? "HIGH" : s >= 25 ? "MEDIUM" : "LOW";
 
   const { nodes, vb } = useMemo(() => {
@@ -622,9 +905,9 @@ function RiskBubbles({ agents, openAgent }) {
     const minX = Math.min(...leaves.map(n => n.x - n.r)) - pad;
     const maxX = Math.max(...leaves.map(n => n.x + n.r)) + pad;
     const minY = Math.min(...leaves.map(n => n.y - n.r)) - pad;
-    const maxY = Math.max(...leaves.map(n => n.y + n.r)) + pad + 8; // extra for labels under small bubbles
+    const maxY = Math.max(...leaves.map(n => n.y + n.r)) + pad + (T.mobile ? 26 : 8); // extra for labels under small bubbles
     return { nodes: leaves, vb: `${minX} ${minY} ${maxX - minX} ${maxY - minY}` };
-  }, [agents]);
+  }, [agents, T.mobile]);
 
   return (
     <div>
@@ -633,9 +916,13 @@ function RiskBubbles({ agents, openAgent }) {
         {nodes.map(n => {
           const a = n.data;
           const c = T.bar[tier(a.score)];
-          const big = n.r >= 40, mid = n.r >= 26;
+          // on phones, only print a name inside a bubble when it actually fits; tapping opens details
+          const fits = a.name.length * 6.8 * fs <= n.r * 1.8;
+          const big = T.mobile ? n.r >= 40 && fits : n.r >= 40;
+          const mid = !T.mobile && n.r >= 26;
           return (
             <g key={a.id} className="argus-bubble" onClick={() => openAgent(a.name)} style={{ cursor: "pointer" }}>
+              <title>{`${a.name}: risk ${a.score} (${tier(a.score)})`}</title>
               <circle cx={n.x} cy={n.y} r={n.r} fill={c} opacity={T.isDark ? 0.16 : 0.12} />
               <circle cx={n.x} cy={n.y} r={n.r} fill="none" stroke={c} strokeWidth={2} opacity={0.85} />
               {a.score >= 80 && (
@@ -644,6 +931,7 @@ function RiskBubbles({ agents, openAgent }) {
                   <animate attributeName="opacity" values="0.55;0" dur="2s" repeatCount="indefinite" />
                 </circle>
               )}
+              <g transform={`translate(${n.x} ${n.y}) scale(${fs}) translate(${-n.x} ${-n.y})`}>
               {big ? (
                 <>
                   <text x={n.x} y={n.y - 6} textAnchor="middle" fontSize={13} fontWeight={700} fill={T.text}>{a.name}</text>
@@ -653,15 +941,22 @@ function RiskBubbles({ agents, openAgent }) {
                 </>
               ) : mid ? (
                 <>
-                  <text x={n.x} y={n.y + 6} textAnchor="middle" fontSize={17} fontWeight={800} fill={c}>{a.score}</text>
-                  <text x={n.x} y={n.y + n.r + 15} textAnchor="middle" fontSize={10.5} fontWeight={600} fill={T.text}>{a.name}</text>
+                  {a.name.length * 5.6 <= n.r * 1.9 ? (
+                    <>
+                      <text x={n.x} y={n.y - 4} textAnchor="middle" fontSize={9.5} fontWeight={700} fill={T.text}>{a.name}</text>
+                      <text x={n.x} y={n.y + 15} textAnchor="middle" fontSize={17} fontWeight={800} fill={c}>{a.score}</text>
+                    </>
+                  ) : (
+                    <text x={n.x} y={n.y + 6} textAnchor="middle" fontSize={17} fontWeight={800} fill={c}>{a.score}</text>
+                  )}
                 </>
               ) : (
                 <>
                   <text x={n.x} y={n.y + 4.5} textAnchor="middle" fontSize={13} fontWeight={800} fill={c}>{a.score}</text>
-                  <text x={n.x} y={n.y + n.r + 14} textAnchor="middle" fontSize={10} fontWeight={600} fill={T.text}>{a.name}</text>
+                  {!T.mobile && <text x={n.x} y={n.y + n.r / fs + 14} textAnchor="middle" fontSize={10} fontWeight={600} fill={T.text}>{a.name}</text>}
                 </>
               )}
+              </g>
             </g>
           );
         })}
@@ -672,6 +967,7 @@ function RiskBubbles({ agents, openAgent }) {
 
 function RiskRadar({ agents, openAgent }) {
   const T = useT();
+  const fs = T.mobile ? 1.7 : 1;
   const S = 700, CX = 350, CY = 330, R = 250;
   const depts = [...new Set(agents.map(a => a.dept))];
   const slice = (Math.PI * 2) / depts.length;
@@ -697,7 +993,7 @@ function RiskRadar({ agents, openAgent }) {
         .argus-sweep { animation: argusSweep 9s linear infinite; transform-origin: ${CX}px ${CY}px; }
         @media (prefers-reduced-motion: reduce) { .argus-sweep { animation: none; opacity: 0; } }
       `}</style>
-      <svg viewBox={`0 0 ${S} 660`} style={{ width: "100%", maxWidth: 760, height: "auto", display: "block", margin: "0 auto" }}>
+      <svg viewBox={T.mobile ? `-50 -10 ${S + 100} 690` : `0 0 ${S} 660`} style={{ width: "100%", maxWidth: 760, height: "auto", display: "block", margin: "0 auto" }}>
         {/* rings: score 25 / 55 / 80 / 100 */}
         {[25, 55, 80, 100].map(v => {
           const rr = 36 + (v / 100) * (R - 36);
@@ -707,7 +1003,7 @@ function RiskRadar({ agents, openAgent }) {
               <circle cx={CX} cy={CY} r={rr} fill="none"
                 stroke={crit ? (T.isDark ? "#f43f5e" : "#e11d48") : T.grid}
                 strokeWidth={crit ? 1.4 : 1} strokeDasharray={crit ? "5 5" : "none"} opacity={crit ? 0.55 : 1} />
-              <text x={CX + 6} y={CY - rr - 5} fontSize={10} fill={crit ? (T.isDark ? "#f43f5e" : "#e11d48") : T.faint}>
+              <text x={CX + 6} y={CY - rr - 5} fontSize={10 * fs} fill={crit ? (T.isDark ? "#f43f5e" : "#e11d48") : T.faint}>
                 {crit ? "critical threshold" : v}
               </text>
             </g>
@@ -723,7 +1019,7 @@ function RiskRadar({ agents, openAgent }) {
           </g>
           <circle cx="50" cy="60" r="5.2" fill="#4a9eea" />
         </g>
-        <text x={CX} y={CY + 26} textAnchor="middle" fontSize={8} fontWeight={700} letterSpacing="1.6" fill={T.blue}>CONTROL</text>
+        <text x={CX} y={CY + 26} textAnchor="middle" fontSize={8 * fs} fontWeight={700} letterSpacing="1.6" fill={T.blue}>CONTROL</text>
 
         {/* department spokes + rim labels */}
         {depts.map((d, i) => {
@@ -735,7 +1031,7 @@ function RiskRadar({ agents, openAgent }) {
               <line x1={CX + 36 * Math.cos(ang)} y1={CY + 36 * Math.sin(ang)}
                 x2={CX + R * Math.cos(ang)} y2={CY + R * Math.sin(ang)}
                 stroke={T.grid} strokeWidth={1} />
-              <text x={lx} y={ly + 3} textAnchor="middle" fontSize={10.5} fontWeight={600}
+              <text x={lx} y={ly + 3} textAnchor="middle" fontSize={10.5 * fs} fontWeight={600}
                 fill={T.dim} letterSpacing="0.4">{d}</text>
             </g>
           );
@@ -761,8 +1057,8 @@ function RiskRadar({ agents, openAgent }) {
                   <animate attributeName="opacity" values="0.7;0" dur="1.9s" repeatCount="indefinite" />
                 </circle>
               )}
-              <text x={a.x} y={a.y - 14} textAnchor="middle" fontSize={11} fontWeight={600} fill={T.text}>{a.name}</text>
-              <text x={a.x} y={a.y + 22} textAnchor="middle" fontSize={10} fill={T.faint}>{a.score}</text>
+              {!T.mobile && <text x={a.x} y={a.y - 14} textAnchor="middle" fontSize={11 * fs} fontWeight={600} fill={T.text}>{a.name}</text>}
+              <text x={a.x} y={a.y + (T.mobile ? 30 : 22)} textAnchor="middle" fontSize={10 * fs} fontWeight={T.mobile ? 700 : 400} fill={T.mobile ? T.text : T.faint}>{a.score}</text>
             </g>
           );
         })}
@@ -780,7 +1076,7 @@ function Heatmap({ agents, openAgent }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: 0 }}>Risk Radar</h1>
+          <h1 style={{ fontSize: T.mobile ? 22 : 26, fontWeight: 800, margin: 0 }}>Risk Radar</h1>
           <div style={{ color: T.dim, marginTop: 6, fontSize: 14 }}>
             {mode === "radar"
               ? "Distance from center is aggregated risk. Sectors are departments. Agents drifting past the dashed ring need review."
@@ -801,9 +1097,26 @@ function Heatmap({ agents, openAgent }) {
       {mode === "radar" ? (
         <Card style={{ marginTop: 20, padding: "18px 12px" }}>
           <RiskRadar agents={agents} openAgent={openAgent} />
+          {T.mobile && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10, padding: "0 4px" }}>
+              {sorted.map(a => (
+                <button key={a.id} onClick={() => openAgent(a.name)} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+                  background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 9,
+                  padding: "10px 12px", color: T.text, fontSize: 14, cursor: "pointer", textAlign: "left",
+                }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, background: T.bar[a.score >= 80 ? "CRITICAL" : a.score >= 55 ? "HIGH" : a.score >= 25 ? "MEDIUM" : "LOW"] }} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                  </span>
+                  <span style={{ color: T.dim, fontSize: 13, whiteSpace: "nowrap" }}>{a.dept} · <b style={{ color: T.text }}>{a.score}</b></span>
+                </button>
+              ))}
+            </div>
+          )}
         </Card>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 16, marginTop: 22 }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${T.mobile ? 140 : 190}px, 1fr))`, gap: T.mobile ? 10 : 16, marginTop: 22 }}>
           {sorted.map(a => {
             const t = T.heat(a.score);
             return (
@@ -881,42 +1194,71 @@ function AgentDrawer({ agent, audit, onClose }) {
 
 export default function ArgusMVP() {
   const [mode, setMode] = useState("dark");
-  const T = THEMES[mode];
+  const mobile = useIsMobile();
+  const T = useMemo(() => ({ ...THEMES[mode], mobile }), [mode, mobile]);
   const [view, setView] = useState("dashboard");
   const [agents, setAgents] = useState(SEED_AGENTS);
   const [policies, setPolicies] = useState(SEED_POLICIES);
   const [audit, setAudit] = useState(SEED_AUDIT);
+  const [reqMap, setReqMap] = useState(SEED_REQ_MAP);
   const [detail, setDetail] = useState(null);
+  const [fwOpen, setFwOpen] = useState(null);
   const [modal, setModal] = useState(null);
   const [globalQ, setGlobalQ] = useState("");
   const [toast, setToast] = useState(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
-  const resetDemo = () => {
-    setAgents(SEED_AGENTS);
-    setPolicies(SEED_POLICIES);
-    setAudit(SEED_AUDIT);
-    setDetail(null);
-    notify("Demo data reset to its original state");
-  };
+  const coverage = useMemo(() => computeCoverage(reqMap, policies), [reqMap, policies]);
+  const openFramework = fwOpen ? coverage.frameworks.find(f => f.id === fwOpen) : null;
+
+  useEffect(() => { if (!mobile) setNavOpen(false); }, [mobile]);
 
   const notify = msg => {
     setToast(msg);
     setTimeout(() => setToast(null), 3500);
   };
 
-  const togglePolicy = id =>
-    setPolicies(ps => ps.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
+  const nowTs = () => new Date().toLocaleString("en-US", {
+    month: "numeric", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
+  });
+
+  const log = (sev, type, agent, desc) =>
+    setAudit(ev => [{ sev, ts: nowTs(), type, agent, desc }, ...ev]);
+
+  const resetDemo = () => {
+    setAgents(SEED_AGENTS);
+    setPolicies(SEED_POLICIES);
+    setAudit(SEED_AUDIT);
+    setReqMap(SEED_REQ_MAP);
+    setDetail(null);
+    setFwOpen(null);
+    notify("Demo data reset to its original state");
+  };
+
+  const togglePolicy = id => {
+    const p = policies.find(x => x.id === id);
+    setPolicies(ps => ps.map(x => x.id === id ? { ...x, enabled: !x.enabled } : x));
+    if (p) log("info", "Policy Change", "—", `Policy "${p.name}" ${p.enabled ? "disabled" : "enabled"}`);
+  };
+
+  const linkPolicy = (key, policyId) => {
+    setReqMap(m => ({ ...m, [key]: [...(m[key] || []), policyId] }));
+    const [fwId, idx] = key.split("|");
+    const fw = FRAMEWORKS.find(f => f.id === fwId);
+    const req = fw?.requirements[Number(idx)];
+    const p = policies.find(x => x.id === policyId);
+    if (fw && req && p) {
+      log("info", "Control Mapped", "—", `"${p.name}" mapped to ${fw.short} ${req.id} (${req.title})`);
+      notify(`Mapped to ${fw.short} ${req.id}`);
+    }
+  };
 
   const openAgent = name => {
     const a = agents.find(x => x.name === name);
     if (a) setDetail(a);
   };
-
-  const nowTs = () => new Date().toLocaleString("en-US", {
-    month: "numeric", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
-  });
 
   const registerAgent = f => {
     const fullAuto = f.autonomy === "Full autonomy";
@@ -926,10 +1268,7 @@ export default function ArgusMVP() {
       score: fullAuto ? 40 : 15, autonomy: f.autonomy, owner: f.owner.trim(),
     };
     setAgents(a => [...a, newAgent]);
-    setAudit(ev => [{
-      sev: "info", ts: nowTs(), type: "Agent Registered", agent: newAgent.name,
-      desc: `${newAgent.name} registered and pending security review before activation`,
-    }, ...ev]);
+    log("info", "Agent Registered", newAgent.name, `${newAgent.name} registered and pending security review before activation`);
     setModal(null);
     notify(`${newAgent.name} registered — pending security review`);
   };
@@ -940,18 +1279,18 @@ export default function ArgusMVP() {
       action: f.action, violations: 0, enabled: true, frameworks: f.frameworks,
     };
     setPolicies(ps => [...ps, newPolicy]);
-    setAudit(ev => [{
-      sev: "info", ts: nowTs(), type: "Policy Created", agent: "—",
-      desc: `Policy "${newPolicy.name}" created with enforcement action ${newPolicy.action}`,
-    }, ...ev]);
+    log("info", "Policy Created", "—", `Policy "${newPolicy.name}" created with enforcement action ${newPolicy.action}`);
     setModal(null);
     notify(`Policy created: ${newPolicy.name}`);
   };
+
+  const go = id => { setView(id); setNavOpen(false); };
 
   const NAV = [
     { id: "dashboard", label: "Dashboard", icon: <Activity size={17} /> },
     { id: "registry", label: "Agent Registry", icon: <Users size={17} /> },
     { id: "policy", label: "Policy Engine", icon: <FileText size={17} /> },
+    { id: "frameworks", label: "Frameworks", icon: <Layers size={17} /> },
     { id: "audit", label: "Audit Trail", icon: <ScanSearch size={17} /> },
     { id: "heatmap", label: "Risk Radar", icon: <AlertTriangle size={17} /> },
   ];
@@ -960,66 +1299,93 @@ export default function ArgusMVP() {
     ? agents.filter(a => a.name.toLowerCase().includes(globalQ.toLowerCase()))
     : [];
 
+  const sidebar = (
+    <aside style={{
+      width: 240, flexShrink: 0, background: T.sidebar, borderRight: `1px solid ${T.border}`,
+      display: "flex", flexDirection: "column", padding: "22px 14px", transition: "background .2s",
+      ...(mobile ? { height: "100%", boxSizing: "border-box", boxShadow: T.shadow } : { position: "sticky", top: 0, height: "100vh", boxSizing: "border-box" }),
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "0 8px", marginBottom: 34 }}>
+        <PanoptesMark size={30} color={T.text} />
+        <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: ".14em", color: T.text, flex: 1 }}>ARGUS</span>
+        {mobile && (
+          <button onClick={() => setNavOpen(false)} aria-label="Close menu" style={{ background: "none", border: "none", color: T.dim, cursor: "pointer", padding: 4 }}><X size={20} /></button>
+        )}
+      </div>
+      <div style={{ color: T.faint, fontSize: 11.5, fontWeight: 700, letterSpacing: ".12em", padding: "0 8px", marginBottom: 10 }}>OPERATIONS</div>
+      <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {NAV.map(n => (
+          <button key={n.id} onClick={() => go(n.id)} style={{
+            display: "flex", alignItems: "center", gap: 12, padding: "11px 12px",
+            borderRadius: 9, border: "none", cursor: "pointer", fontSize: 14.5, fontWeight: 500,
+            background: view === n.id ? T.blue : "transparent",
+            color: view === n.id ? "#fff" : T.navText, textAlign: "left", transition: "background .12s",
+          }}>
+            {n.icon}{n.label}
+          </button>
+        ))}
+      </nav>
+      <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 12, padding: "14px 8px 0", borderTop: `1px solid ${T.border}` }}>
+        <div style={{ width: 36, height: 36, borderRadius: "50%", background: T.avatarBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: T.blue }}>OP</div>
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 600 }}>Ops Admin</div>
+          <div style={{ color: T.faint, fontSize: 12 }}>Level 4 Clearance</div>
+        </div>
+      </div>
+    </aside>
+  );
+
+  const px = mobile ? 16 : 28;
+
   return (
     <ThemeCtx.Provider value={T}>
       <div style={{
         display: "flex", minHeight: "100vh", background: T.bg, color: T.text,
         fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif",
-        transition: "background .2s, color .2s",
+        transition: "background .2s, color .2s", overflowX: "hidden",
       }}>
-        <aside style={{
-          width: 240, flexShrink: 0, background: T.sidebar, borderRight: `1px solid ${T.border}`,
-          display: "flex", flexDirection: "column", padding: "22px 14px", transition: "background .2s",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "0 8px", marginBottom: 34 }}>
-            <PanoptesMark size={30} color={T.text} />
-            <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: ".14em", color: T.text }}>ARGUS</span>
+        {!mobile && sidebar}
+        {mobile && navOpen && (
+          <div onClick={() => setNavOpen(false)} style={{ position: "fixed", inset: 0, background: T.overlay, zIndex: 55 }}>
+            <div onClick={e => e.stopPropagation()} style={{ height: "100%", width: 260 }}>{sidebar}</div>
           </div>
-          <div style={{ color: T.faint, fontSize: 11.5, fontWeight: 700, letterSpacing: ".12em", padding: "0 8px", marginBottom: 10 }}>OPERATIONS</div>
-          <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {NAV.map(n => (
-              <button key={n.id} onClick={() => setView(n.id)} style={{
-                display: "flex", alignItems: "center", gap: 12, padding: "11px 12px",
-                borderRadius: 9, border: "none", cursor: "pointer", fontSize: 14.5, fontWeight: 500,
-                background: view === n.id ? T.blue : "transparent",
-                color: view === n.id ? "#fff" : T.navText, textAlign: "left", transition: "background .12s",
-              }}>
-                {n.icon}{n.label}
-              </button>
-            ))}
-          </nav>
-          <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 12, padding: "14px 8px 0", borderTop: `1px solid ${T.border}` }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: T.avatarBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: T.blue }}>OP</div>
-            <div>
-              <div style={{ fontSize: 13.5, fontWeight: 600 }}>Ops Admin</div>
-              <div style={{ color: T.faint, fontSize: 12 }}>Level 4 Clearance</div>
-            </div>
-          </div>
-        </aside>
+        )}
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
           <div style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "8px 28px",
+            display: "flex", alignItems: "center", gap: 10, padding: `8px ${px}px`,
             background: T.blueSoft, borderBottom: `1px solid ${T.blueBorder}`,
-            fontSize: 13, color: T.isDark ? "#9ec8f2" : "#1d5c9e",
+            fontSize: mobile ? 12 : 13, color: T.isDark ? "#9ec8f2" : "#1d5c9e",
           }}>
             <Info size={14} style={{ flexShrink: 0 }} />
-            <span style={{ flex: 1 }}>
-              Demo environment — all agents, violations, and events are synthetic. Explore freely: register agents, toggle policies, click anything.
+            <span style={{ flex: 1, lineHeight: 1.4 }}>
+              {mobile
+                ? "Demo environment with synthetic data."
+                : "Demo environment — all agents, violations, and events are synthetic. Explore freely: register agents, toggle policies, click anything."}
             </span>
             <button onClick={resetDemo} style={{
               display: "flex", alignItems: "center", gap: 6, background: "transparent",
               border: `1px solid ${T.blueBorder}`, color: "inherit", borderRadius: 7,
-              padding: "5px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+              padding: "5px 10px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
             }}>
-              <RotateCcw size={13} /> Reset demo
+              <RotateCcw size={13} /> Reset{mobile ? "" : " demo"}
             </button>
           </div>
-          <header style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 28px", borderBottom: `1px solid ${T.border}` }}>
-            <div style={{ position: "relative", flex: 1, maxWidth: 620 }}>
+
+          <header style={{ display: "flex", alignItems: "center", gap: mobile ? 10 : 16, padding: `${mobile ? 12 : 16}px ${px}px`, borderBottom: `1px solid ${T.border}` }}>
+            {mobile && (
+              <>
+                <button onClick={() => setNavOpen(true)} aria-label="Open menu" style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, flexShrink: 0,
+                  borderRadius: 10, cursor: "pointer", background: T.panel, border: `1px solid ${T.border}`, color: T.text,
+                }}><Menu size={18} /></button>
+                <PanoptesMark size={26} color={T.text} />
+              </>
+            )}
+            <div style={{ position: "relative", flex: 1, minWidth: 0, maxWidth: 620 }}>
               <Search size={16} color={T.faint} style={{ position: "absolute", left: 14, top: 12, zIndex: 1 }} />
               <input value={globalQ} onChange={e => setGlobalQ(e.target.value)}
-                placeholder="Global search agents, logs, policies..."
+                placeholder={mobile ? "Search agents..." : "Global search agents, logs, policies..."}
                 style={{ ...fieldStyle(T), background: T.panel, borderRadius: 10, padding: "11px 14px 11px 40px" }} />
               {globalHits.length > 0 && (
                 <div style={{ position: "absolute", top: 46, left: 0, right: 0, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, zIndex: 40, overflow: "hidden", boxShadow: T.shadow }}>
@@ -1039,22 +1405,25 @@ export default function ArgusMVP() {
             <button onClick={() => setMode(m => m === "dark" ? "light" : "dark")}
               aria-label={T.isDark ? "Switch to light mode" : "Switch to dark mode"}
               style={{
-                marginLeft: "auto", display: "flex", alignItems: "center", justifyContent: "center",
+                marginLeft: "auto", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 width: 38, height: 38, borderRadius: 10, cursor: "pointer",
                 background: T.panel, border: `1px solid ${T.border}`, color: T.dim, transition: "all .15s",
               }}>
               {T.isDark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
-            <div style={{ position: "relative" }}>
-              <Bell size={19} color={T.dim} />
-              <span style={{ position: "absolute", top: -2, right: -2, width: 8, height: 8, borderRadius: "50%", background: T.isDark ? "#f43f5e" : "#e11d48" }} />
-            </div>
+            {!mobile && (
+              <div style={{ position: "relative" }}>
+                <Bell size={19} color={T.dim} />
+                <span style={{ position: "absolute", top: -2, right: -2, width: 8, height: 8, borderRadius: "50%", background: T.isDark ? "#f43f5e" : "#e11d48" }} />
+              </div>
+            )}
           </header>
 
-          <main style={{ padding: 28, overflowY: "auto" }}>
-            {view === "dashboard" && <Dashboard agents={agents} policies={policies} openAgent={openAgent} />}
+          <main style={{ padding: mobile ? "18px 16px 96px" : 28, minWidth: 0 }}>
+            {view === "dashboard" && <Dashboard agents={agents} coverage={coverage} openAgent={openAgent} onOpenFrameworks={() => go("frameworks")} />}
             {view === "registry" && <Registry agents={agents} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
-            {view === "policy" && <PolicyEngine policies={policies} toggle={togglePolicy} onOpenCreate={() => setModal("policy")} />}
+            {view === "policy" && <PolicyEngine policies={policies} reqMap={reqMap} toggle={togglePolicy} onOpenCreate={() => setModal("policy")} />}
+            {view === "frameworks" && <Frameworks coverage={coverage} onOpen={setFwOpen} />}
             {view === "audit" && <AuditTrail audit={audit} />}
             {view === "heatmap" && <Heatmap agents={agents} openAgent={openAgent} />}
           </main>
@@ -1063,15 +1432,17 @@ export default function ArgusMVP() {
         {modal === "register" && <RegisterAgentModal onClose={() => setModal(null)} onRegister={registerAgent} />}
         {modal === "policy" && <CreatePolicyModal onClose={() => setModal(null)} onCreate={createPolicy} />}
         <AgentDrawer agent={detail} audit={audit} onClose={() => setDetail(null)} />
+        <FrameworkDrawer framework={openFramework} policies={policies} onClose={() => setFwOpen(null)}
+          onLink={linkPolicy} onTogglePolicy={togglePolicy} />
 
-        <button onClick={() => setFeedbackOpen(true)} style={{
-          position: "fixed", bottom: 24, right: 24, zIndex: 45,
+        <button onClick={() => setFeedbackOpen(true)} aria-label="Send feedback" style={{
+          position: "fixed", bottom: mobile ? 16 : 24, right: mobile ? 16 : 24, zIndex: 45,
           display: "flex", alignItems: "center", gap: 8,
           background: T.blue, color: "#fff", border: "none", borderRadius: 999,
-          padding: "12px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer",
+          padding: mobile ? 14 : "12px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer",
           boxShadow: T.shadow,
         }}>
-          <MessageCircle size={16} /> Feedback
+          <MessageCircle size={mobile ? 20 : 16} />{!mobile && " Feedback"}
         </button>
 
         {feedbackOpen && (
@@ -1093,12 +1464,13 @@ export default function ArgusMVP() {
 
         {toast && (
           <div style={{
-            position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+            position: "fixed", bottom: mobile ? 84 : 24, left: "50%", transform: "translateX(-50%)",
+            width: mobile ? "calc(100% - 32px)" : "auto", boxSizing: "border-box",
             background: T.panelSoft, border: `1px solid ${T.blueBorder}`, color: T.text,
             borderRadius: 10, padding: "12px 20px", fontSize: 14, zIndex: 70,
             display: "flex", alignItems: "center", gap: 10, boxShadow: T.shadow,
           }}>
-            <CheckCircle2 size={16} color={T.isDark ? "#34d399" : "#059669"} /> {toast}
+            <CheckCircle2 size={16} color={T.isDark ? "#34d399" : "#059669"} style={{ flexShrink: 0 }} /> {toast}
           </div>
         )}
       </div>

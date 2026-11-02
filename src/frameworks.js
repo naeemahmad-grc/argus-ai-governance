@@ -261,6 +261,86 @@ export const FRAMEWORKS = [
   },
 ];
 
+/*
+ * Recommended controls
+ *
+ * For every requirement that has no control in the seed data, ARGUS recommends
+ * a policy that would satisfy it, the enforcement action to use, and the
+ * evidence an auditor would expect to see. One control often closes gaps in
+ * several frameworks at once, which is how the recommendations are ranked.
+ */
+
+// Requirement key from framework id + requirement id (nth occurrence when an id repeats)
+const key = (fwId, reqId, nth = 0) => {
+  const f = FRAMEWORKS.find(x => x.id === fwId);
+  const idxs = f.requirements.map((q, i) => (q.id === reqId ? i : -1)).filter(i => i >= 0);
+  if (idxs[nth] === undefined) throw new Error(`Unknown requirement ${fwId} ${reqId} #${nth}`);
+  return `${fwId}|${idxs[nth]}`;
+};
+
+const rec = (id, name, tag, action, desc, evidence, closes) =>
+  ({ id, name, tag, action, desc, evidence, closeKeys: closes.map(c => key(...c)) });
+
+export const RECOMMENDED_POLICIES = [
+  rec("rc-impact-assessment", "Impact Assessment Before High-Risk Deployment", "AI Governance", "REQUIRE APPROVAL",
+    "Agents used for consequential decisions (hiring, credit, housing, healthcare, essential services) cannot be activated until an AI impact assessment covering affected people, fundamental rights and societal effects is completed and approved.",
+    "Completed impact assessment (FRIA under the EU AI Act), approver sign-off, review date",
+    [["eu-ai-act", "Art. 27"], ["iso-42001", "A.5.2"], ["oecd", "1.1"]]),
+  rec("rc-bias-audit", "Bias Audit for Decision-Making Agents", "AI Governance", "BLOCK",
+    "Agents that screen, rank or score people must have a current independent bias audit. Use is blocked when the audit is missing or more than 12 months old.",
+    "Bias audit report with selection rates and impact ratios, auditor independence statement, published summary where required",
+    [["us-guidance", "NYC LL 144"], ["nist-ai-rmf", "MEASURE 2.11"]]),
+  rec("rc-ai-disclosure", "Disclose AI Interaction and Automated Decisions", "Transparency", "BLOCK",
+    "Customer- and candidate-facing agents must show a clear notice that the person is dealing with AI, and a notice when an automated system influences a consequential decision. Agents without a configured notice cannot go live.",
+    "Approved notice text per agent, screenshots of where it appears, notice delivery logs",
+    [["eu-ai-act", "Art. 50"], ["us-guidance", "CO SB 26-189", 0]]),
+  rec("rc-human-review", "Human Review of Adverse Automated Decisions", "Human Oversight", "REQUIRE APPROVAL",
+    "Any adverse decision about an individual that an agent made or materially influenced is routed to a qualified human reviewer on request, with a way to correct inaccurate data and contest the outcome.",
+    "Review request log, reviewer decisions and rationale, turnaround times",
+    [["us-guidance", "CO SB 26-189", 1], ["gdpr", "Art. 22"]]),
+  rec("rc-ai-literacy", "AI Literacy Training for Agent Owners", "AI Governance", "REQUIRE APPROVAL",
+    "Agent owners and operators must complete role-based AI literacy training before an agent they own can be activated, and refresh it annually.",
+    "Training curriculum, completion records per owner, annual refresh tracking",
+    [["eu-ai-act", "Art. 4"]]),
+  rec("rc-data-provenance", "Provenance Checks for Training and Retrieval Data", "AI Security", "REQUIRE APPROVAL",
+    "New datasets, fine-tuning data and knowledge sources connected to an agent need documented provenance, an integrity check and an owner before use. Changes to indexed content are logged.",
+    "Data source register, provenance and integrity check results, retrieval index change log",
+    [["owasp-llm", "LLM04"], ["owasp-llm", "LLM08"], ["mitre-atlas", "AML.T0070"]]),
+  rec("rc-output-validation", "Validate Agent Output Before Execution", "AI Security", "BLOCK",
+    "Agent output passed to code, queries, shells, browsers or downstream systems is validated and sanitized first. Generated code only runs in an isolated sandbox.",
+    "Validation rules per integration, sandbox configuration, blocked-output log",
+    [["owasp-llm", "LLM05"], ["owasp-agentic", "ASI05"]]),
+  rec("rc-memory-integrity", "Protect Agent Memory and Context", "AI Security", "BLOCK",
+    "Writes to an agent's persistent memory from untrusted content are quarantined for review. Memory is scoped per user and session and expires on a set schedule.",
+    "Memory write policy, quarantine log, retention settings",
+    [["owasp-agentic", "ASI06"], ["mitre-atlas", "AML.T0080"]]),
+  rec("rc-red-team", "Adversarial Testing Before Release", "AI Security", "REQUIRE APPROVAL",
+    "Agents must pass adversarial testing (prompt injection, jailbreak, data leakage, tool abuse) before activation and after significant changes. Findings above medium severity block release.",
+    "Test plan, red-team findings and remediation, retest results",
+    [["csa-aicm", "TVM"], ["csa-aismm", "Testing"]]),
+  rec("rc-agent-auth", "Authenticate Inter-Agent Communication", "AI Security", "BLOCK",
+    "Agent-to-agent calls require mutual authentication and signed messages. Messages from unregistered agents are rejected.",
+    "Agent identity and credential inventory, authentication configuration, rejected-message log",
+    [["owasp-agentic", "ASI07"]]),
+  rec("rc-grounding", "Grounding Checks for Factual Output", "AI Quality", "WARN",
+    "Factual answers must cite approved sources. Responses that can't be grounded are flagged to the user and logged for review.",
+    "Approved source list, grounding check results, flagged-response samples",
+    [["owasp-llm", "LLM09"]]),
+  rec("rc-change-control", "Change Approval for Agent Configuration", "Change Management", "REQUIRE APPROVAL",
+    "Changes to a production agent's model, system prompt, tools or permissions need approval and are recorded with before and after versions.",
+    "Change tickets with approvals, configuration version history",
+    [["soc2", "CC8.1"]]),
+];
+
+export const recommendationFor = reqKey => RECOMMENDED_POLICIES.find(t => t.closeKeys.includes(reqKey));
+
+// "EU AI Act Art. 27" style label for a requirement key
+export const reqLabel = reqKey => {
+  const [fwId, i] = reqKey.split("|");
+  const f = FRAMEWORKS.find(x => x.id === fwId);
+  return `${f.short} ${f.requirements[Number(i)].id}`;
+};
+
 // Flat mapping { "<frameworkId>|<index>": [coveredBy...] } used as editable app state
 export const SEED_REQ_MAP = Object.fromEntries(
   FRAMEWORKS.flatMap(f => f.requirements.map((req, i) => [`${f.id}|${i}`, req.coveredBy]))

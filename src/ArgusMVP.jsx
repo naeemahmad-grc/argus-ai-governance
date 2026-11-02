@@ -3,10 +3,13 @@ import {
   Shield, Search, Bell, Activity, Users, FileText, AlertTriangle,
   ScanSearch, Cpu, HeartPulse, ShieldAlert, CheckCircle2, Download,
   X, Filter, Plus, Info, AlertOctagon, AlertCircle, Sun, Moon,
-  RotateCcw, MessageCircle, ExternalLink, Menu, Layers, Link2, ChevronRight
+  RotateCcw, MessageCircle, ExternalLink, Menu, Layers, Link2, ChevronRight, Lightbulb
 } from "lucide-react";
 import * as d3 from "d3";
-import { FRAMEWORKS, FRAMEWORK_GROUPS, CAPABILITIES, SEED_REQ_MAP, computeCoverage, frameworksForPolicy } from "./frameworks.js";
+import {
+  FRAMEWORKS, FRAMEWORK_GROUPS, CAPABILITIES, SEED_REQ_MAP, RECOMMENDED_POLICIES,
+  computeCoverage, frameworksForPolicy, recommendationFor, reqLabel,
+} from "./frameworks.js";
 
 /* ---------------- seed data ---------------- */
 
@@ -613,6 +616,11 @@ function PolicyEngine({ policies, reqMap, toggle, onOpenCreate }) {
                 </div>
                 <div style={{ fontSize: 16.5, fontWeight: 700, marginBottom: 8, lineHeight: 1.3 }}>{p.name}</div>
                 <div style={{ color: T.dim, fontSize: 13.5, lineHeight: 1.5 }}>{p.desc}</div>
+                {p.evidence && (
+                  <div style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 8 }}>
+                    <span style={{ fontWeight: 700 }}>Evidence: </span><span style={{ color: T.dim }}>{p.evidence}</span>
+                  </div>
+                )}
                 {fws.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
                     {shown.map(fw => (
@@ -706,7 +714,7 @@ function AuditTrail({ audit }) {
 
 /* ---------------- frameworks ---------------- */
 
-function Frameworks({ coverage, onOpen }) {
+function Frameworks({ coverage, gapKeys, policies, onOpen, onAdopt }) {
   const T = useT();
   const [group, setGroup] = useState("all");
   const list = coverage.frameworks.filter(f => group === "all" || f.group === group);
@@ -730,6 +738,8 @@ function Frameworks({ coverage, onOpen }) {
           </Card>
         ))}
       </div>
+
+      <RecommendationPlan gapKeys={gapKeys} policies={policies} onAdopt={onAdopt} totalGaps={coverage.gaps} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: T.mobile ? "nowrap" : "wrap", overflowX: "auto", margin: "20px 0 16px", paddingBottom: 2 }}>
         {[{ id: "all", label: "All" }, ...FRAMEWORK_GROUPS].map(g => (
@@ -773,7 +783,102 @@ function Frameworks({ coverage, onOpen }) {
   );
 }
 
-function FrameworkDrawer({ framework, policies, onClose, onLink, onTogglePolicy }) {
+function RecommendedControl({ tpl, reqKey, gapKeys, policies, onAdopt }) {
+  const T = useT();
+  const a = T.action[tpl.action];
+  const existing = policies.find(p => p.id === tpl.id);
+  const alsoCloses = tpl.closeKeys.filter(k => k !== reqKey && gapKeys.has(k)).map(reqLabel);
+  return (
+    <div style={{ marginTop: 10, background: T.panel, border: `1px dashed ${T.blueBorder}`, borderRadius: 9, padding: "12px 13px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, letterSpacing: ".06em", color: T.blue, textTransform: "uppercase" }}>
+        <Lightbulb size={13} /> Recommended control
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.35 }}>{tpl.name}</div>
+        <Pill small fg={a.fg} bg={a.bg}>{tpl.action}</Pill>
+      </div>
+      <div style={{ color: T.dim, fontSize: 13, lineHeight: 1.5, marginTop: 6 }}>{tpl.desc}</div>
+      <div style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 8 }}>
+        <span style={{ fontWeight: 700 }}>Evidence to retain: </span>
+        <span style={{ color: T.dim }}>{tpl.evidence}</span>
+      </div>
+      {alsoCloses.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 8 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700 }}>Also closes:</span>
+          {alsoCloses.map(l => <Pill key={l} small fg={T.dim} bg={T.panelSoft} border={T.border}>{l}</Pill>)}
+        </div>
+      )}
+      <button onClick={() => onAdopt(tpl)} style={{
+        display: "flex", alignItems: "center", gap: 6, marginTop: 11, fontSize: 13, fontWeight: 700,
+        padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: T.blue, color: "#fff", border: "none",
+      }}>
+        <Plus size={14} /> {existing ? (existing.enabled ? "Map this policy" : "Enable and map this policy") : "Add policy and map"}
+      </button>
+    </div>
+  );
+}
+
+function RecommendationPlan({ gapKeys, policies, onAdopt, totalGaps }) {
+  const T = useT();
+  const [showAll, setShowAll] = useState(false);
+  const ranked = RECOMMENDED_POLICIES
+    .map(t => ({ t, open: t.closeKeys.filter(k => gapKeys.has(k)) }))
+    .filter(x => x.open.length > 0)
+    .sort((a, b) => b.open.length - a.open.length);
+  if (ranked.length === 0) return null;
+  const closable = new Set(ranked.flatMap(x => x.open)).size;
+  const shown = showAll ? ranked : ranked.slice(0, 4);
+
+  return (
+    <Card style={{ padding: T.mobile ? 16 : 20, marginTop: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Lightbulb size={17} color={T.blue} />
+        <div style={{ fontSize: 17, fontWeight: 700 }}>Recommended controls</div>
+      </div>
+      <div style={{ color: T.dim, fontSize: 13.5, marginTop: 4, lineHeight: 1.5 }}>
+        Adding these {ranked.length} policies would close {closable} of {totalGaps} open gaps. Ranked by how many gaps each one closes.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+        {shown.map(({ t, open }) => {
+          const a = T.action[t.action];
+          const existing = policies.find(p => p.id === t.id);
+          return (
+            <div key={t.id} style={{
+              display: "flex", flexDirection: T.mobile ? "column" : "row", alignItems: T.mobile ? "stretch" : "center",
+              gap: T.mobile ? 10 : 16, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px",
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>{t.name}</span>
+                  <Pill small fg={a.fg} bg={a.bg}>{t.action}</Pill>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 7, alignItems: "center" }}>
+                  <span style={{ fontSize: 12.5, color: T.isDark ? "#f59e0b" : "#b45309", fontWeight: 700 }}>
+                    Closes {open.length} gap{open.length > 1 ? "s" : ""}:
+                  </span>
+                  {open.map(k => <Pill key={k} small fg={T.dim} bg={T.panel} border={T.border}>{reqLabel(k)}</Pill>)}
+                </div>
+              </div>
+              <button onClick={() => onAdopt(t)} style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13, fontWeight: 700,
+                padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: T.blue, color: "#fff", border: "none", whiteSpace: "nowrap",
+              }}>
+                <Plus size={14} /> {existing ? "Enable and map" : "Add and map"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      {ranked.length > 4 && (
+        <button onClick={() => setShowAll(v => !v)} style={{ marginTop: 12, background: "none", border: "none", color: T.blue, fontSize: 13.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+          {showAll ? "Show fewer" : `Show all ${ranked.length} recommendations`}
+        </button>
+      )}
+    </Card>
+  );
+}
+
+function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogglePolicy, onAdopt }) {
   const T = useT();
   const [linking, setLinking] = useState(null);
   if (!framework) return null;
@@ -842,6 +947,11 @@ function FrameworkDrawer({ framework, policies, onClose, onLink, onTogglePolicy 
                       </div>
                     )}
 
+                    {!req.covered && !disabledOnly && recommendationFor(req.key) && (
+                      <RecommendedControl tpl={recommendationFor(req.key)} reqKey={req.key} gapKeys={gapKeys}
+                        policies={policies} onAdopt={onAdopt} />
+                    )}
+
                     {!req.covered && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                         {disabledOnly && linkedPolicies.filter(p => !p.enabled).map(p => (
@@ -858,7 +968,7 @@ function FrameworkDrawer({ framework, policies, onClose, onLink, onTogglePolicy 
                           </select>
                         ) : (
                           <button onClick={() => setLinking(req.key)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: "transparent", color: T.blue, border: `1px solid ${T.blueBorder}` }}>
-                            <Link2 size={13} /> Map a policy
+                            <Link2 size={13} /> {recommendationFor(req.key) && !disabledOnly ? "Map an existing policy instead" : "Map a policy"}
                           </button>
                         )}
                       </div>
@@ -1211,6 +1321,9 @@ export default function ArgusMVP() {
 
   const coverage = useMemo(() => computeCoverage(reqMap, policies), [reqMap, policies]);
   const openFramework = fwOpen ? coverage.frameworks.find(f => f.id === fwOpen) : null;
+  const gapKeys = useMemo(() => new Set(
+    coverage.frameworks.flatMap(f => f.reqs.filter(q => !q.covered).map(q => q.key))
+  ), [coverage]);
 
   useEffect(() => { if (!mobile) setNavOpen(false); }, [mobile]);
 
@@ -1253,6 +1366,28 @@ export default function ArgusMVP() {
       log("info", "Control Mapped", "—", `"${p.name}" mapped to ${fw.short} ${req.id} (${req.title})`);
       notify(`Mapped to ${fw.short} ${req.id}`);
     }
+  };
+
+  // Create (or re-enable) a recommended policy and map it to every requirement it satisfies
+  const adoptRecommendation = tpl => {
+    const existing = policies.find(p => p.id === tpl.id);
+    const closing = tpl.closeKeys.filter(k => gapKeys.has(k));
+    if (existing) {
+      if (!existing.enabled) setPolicies(ps => ps.map(p => p.id === tpl.id ? { ...p, enabled: true } : p));
+    } else {
+      setPolicies(ps => [...ps, {
+        id: tpl.id, tag: tpl.tag, name: tpl.name, desc: tpl.desc, action: tpl.action,
+        violations: 0, enabled: true, frameworks: [], evidence: tpl.evidence,
+      }]);
+    }
+    setReqMap(m => {
+      const next = { ...m };
+      tpl.closeKeys.forEach(k => { if (!(next[k] || []).includes(tpl.id)) next[k] = [...(next[k] || []), tpl.id]; });
+      return next;
+    });
+    log("info", existing ? "Policy Change" : "Policy Created", "—",
+      `Recommended policy "${tpl.name}" ${existing ? "enabled and mapped" : "added"}; closes ${closing.map(reqLabel).join(", ") || "no open gaps"}`);
+    notify(`${tpl.name} added. Closed ${closing.length} gap${closing.length === 1 ? "" : "s"}.`);
   };
 
   const openAgent = name => {
@@ -1423,7 +1558,7 @@ export default function ArgusMVP() {
             {view === "dashboard" && <Dashboard agents={agents} coverage={coverage} openAgent={openAgent} onOpenFrameworks={() => go("frameworks")} />}
             {view === "registry" && <Registry agents={agents} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
             {view === "policy" && <PolicyEngine policies={policies} reqMap={reqMap} toggle={togglePolicy} onOpenCreate={() => setModal("policy")} />}
-            {view === "frameworks" && <Frameworks coverage={coverage} onOpen={setFwOpen} />}
+            {view === "frameworks" && <Frameworks coverage={coverage} gapKeys={gapKeys} policies={policies} onOpen={setFwOpen} onAdopt={adoptRecommendation} />}
             {view === "audit" && <AuditTrail audit={audit} />}
             {view === "heatmap" && <Heatmap agents={agents} openAgent={openAgent} />}
           </main>
@@ -1432,8 +1567,8 @@ export default function ArgusMVP() {
         {modal === "register" && <RegisterAgentModal onClose={() => setModal(null)} onRegister={registerAgent} />}
         {modal === "policy" && <CreatePolicyModal onClose={() => setModal(null)} onCreate={createPolicy} />}
         <AgentDrawer agent={detail} audit={audit} onClose={() => setDetail(null)} />
-        <FrameworkDrawer framework={openFramework} policies={policies} onClose={() => setFwOpen(null)}
-          onLink={linkPolicy} onTogglePolicy={togglePolicy} />
+        <FrameworkDrawer framework={openFramework} policies={policies} gapKeys={gapKeys} onClose={() => setFwOpen(null)}
+          onLink={linkPolicy} onTogglePolicy={togglePolicy} onAdopt={adoptRecommendation} />
 
         <button onClick={() => setFeedbackOpen(true)} aria-label="Send feedback" style={{
           position: "fixed", bottom: mobile ? 16 : 24, right: mobile ? 16 : 24, zIndex: 45,

@@ -499,6 +499,33 @@ function CoverageBar({ label, covered, total, pct }) {
   );
 }
 
+const FilterChip = ({ active, onClick, label, count }) => {
+  const T = useT();
+  return (
+    <button onClick={onClick} aria-pressed={active} style={{
+      display: "inline-flex", alignItems: "center", gap: 7,
+      fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap",
+      background: active ? T.blue : T.panel, color: active ? "#fff" : T.dim,
+      border: `1px solid ${active ? T.blue : T.border}`,
+    }}>
+      {label}
+      {count !== undefined && (
+        <span style={{
+          fontSize: 11.5, fontWeight: 700, minWidth: 18, textAlign: "center", padding: "1px 6px", borderRadius: 99,
+          background: active ? "rgba(255,255,255,.22)" : T.panelSoft, color: active ? "#fff" : T.faint,
+        }}>{count}</span>
+      )}
+    </button>
+  );
+};
+
+const chipRow = mobile => ({
+  display: "flex", gap: 8, flexWrap: mobile ? "nowrap" : "wrap", overflowX: "auto", paddingBottom: 2,
+});
+
+// framework short name -> group id, used to place each policy in the framework groups
+const FW_GROUP = Object.fromEntries(FRAMEWORKS.map(f => [f.short, f.group]));
+
 function Registry({ agents, openAgent, onOpenRegister }) {
   const T = useT();
   const [q, setQ] = useState("");
@@ -594,6 +621,30 @@ function Registry({ agents, openAgent, onOpenRegister }) {
 
 function PolicyEngine({ policies, reqMap, toggle, onOpenCreate }) {
   const T = useT();
+  const [group, setGroup] = useState("all");
+  const [action, setAction] = useState("all");
+
+  const rows = useMemo(() => policies.map(p => {
+    const fws = frameworksForPolicy(p, reqMap);
+    return { p, fws, groups: new Set(fws.map(f => FW_GROUP[f]).filter(Boolean)) };
+  }), [policies, reqMap]);
+
+  const inGroup = (r, g) => g === "all" || (g === "unmapped" ? r.groups.size === 0 : r.groups.has(g));
+  const inAction = (r, act) => act === "all" || r.p.action === act;
+  const shown = rows.filter(r => inGroup(r, group) && inAction(r, action));
+
+  const groupChips = [{ id: "all", label: "All" }, ...FRAMEWORK_GROUPS];
+  const unmapped = rows.filter(r => r.groups.size === 0).length;
+  if (unmapped > 0 || group === "unmapped") groupChips.push({ id: "unmapped", label: "Not mapped" });
+  const actionChips = [
+    { id: "all", label: "Any action" },
+    { id: "BLOCK", label: "Block" },
+    { id: "REQUIRE APPROVAL", label: "Require approval" },
+    { id: "WARN", label: "Warn" },
+    { id: "AUDIT", label: "Audit" },
+  ];
+  const filtered = group !== "all" || action !== "all";
+
   return (
     <div>
       <PageHeader title="Policy Engine" subtitle="Define and manage governance rules for AI agent behavior. Framework tags come from the requirement crosswalk.">
@@ -602,11 +653,38 @@ function PolicyEngine({ policies, reqMap, toggle, onOpenCreate }) {
         </button>
       </PageHeader>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: T.mobile ? 12 : 16, marginTop: 20 }}>
-        {policies.map(p => {
+      <div style={{ ...chipRow(T.mobile), marginTop: 20 }}>
+        {groupChips.map(g => (
+          <FilterChip key={g.id} active={group === g.id} onClick={() => setGroup(g.id)} label={g.label}
+            count={rows.filter(r => inGroup(r, g.id) && inAction(r, action)).length} />
+        ))}
+      </div>
+      <div style={{ ...chipRow(T.mobile), marginTop: 8 }}>
+        {actionChips.map(c => (
+          <FilterChip key={c.id} active={action === c.id} onClick={() => setAction(c.id)} label={c.label}
+            count={rows.filter(r => inGroup(r, group) && inAction(r, c.id)).length} />
+        ))}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, color: T.faint, fontSize: 13 }}>
+        <span>Showing {shown.length} of {policies.length} policies</span>
+        {filtered && (
+          <button onClick={() => { setGroup("all"); setAction("all"); }} style={{ background: "none", border: "none", color: T.blue, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {shown.length === 0 && (
+        <Card style={{ padding: 28, textAlign: "center", color: T.faint, marginTop: 14 }}>
+          No policies match these filters.
+        </Card>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: T.mobile ? 12 : 16, marginTop: 14 }}>
+        {shown.map(({ p, fws }) => {
           const a = T.action[p.action];
-          const fws = frameworksForPolicy(p, reqMap);
-          const shown = fws.slice(0, 5);
+          const tags = fws.slice(0, 5);
           return (
             <Card key={p.id} style={{ display: "flex", flexDirection: "column", opacity: p.enabled ? 1 : 0.6, transition: "opacity .15s" }}>
               <div style={{ padding: "18px 18px 14px", flex: 1 }}>
@@ -623,11 +701,11 @@ function PolicyEngine({ policies, reqMap, toggle, onOpenCreate }) {
                 )}
                 {fws.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
-                    {shown.map(fw => (
+                    {tags.map(fw => (
                       <Pill key={fw} small fg={T.blue} bg={T.blueSoft} border={T.blueBorder}>{fw}</Pill>
                     ))}
-                    {fws.length > shown.length && (
-                      <Pill small fg={T.dim} bg={T.panelSoft} border={T.border}>+{fws.length - shown.length} more</Pill>
+                    {fws.length > tags.length && (
+                      <Pill small fg={T.dim} bg={T.panelSoft} border={T.border}>+{fws.length - tags.length} more</Pill>
                     )}
                   </div>
                 )}
@@ -743,11 +821,8 @@ function Frameworks({ coverage, gapKeys, policies, onOpen, onAdopt }) {
 
       <div style={{ display: "flex", gap: 8, flexWrap: T.mobile ? "nowrap" : "wrap", overflowX: "auto", margin: "20px 0 16px", paddingBottom: 2 }}>
         {[{ id: "all", label: "All" }, ...FRAMEWORK_GROUPS].map(g => (
-          <button key={g.id} onClick={() => setGroup(g.id)} style={{
-            fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap",
-            background: group === g.id ? T.blue : T.panel, color: group === g.id ? "#fff" : T.dim,
-            border: `1px solid ${group === g.id ? T.blue : T.border}`,
-          }}>{g.label}</button>
+          <FilterChip key={g.id} active={group === g.id} onClick={() => setGroup(g.id)} label={g.label}
+            count={coverage.frameworks.filter(f => g.id === "all" || f.group === g.id).length} />
         ))}
       </div>
 

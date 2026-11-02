@@ -6,7 +6,7 @@
  * a complete reproduction of any framework.
  *
  * A requirement is covered when an always-on platform capability or at least
- * one ENABLED policy is mapped to it. Requirements with neither are gaps.
+ * one enabled, approved policy is mapped to it. Requirements with neither are gaps.
  *
  * Status notes reflect public information as of November 2026.
  */
@@ -278,58 +278,184 @@ const key = (fwId, reqId, nth = 0) => {
   return `${fwId}|${idxs[nth]}`;
 };
 
-const rec = (id, name, tag, action, desc, evidence, closes) =>
-  ({ id, name, tag, action, desc, evidence, closeKeys: closes.map(c => key(...c)) });
+// Roles that can own or approve a policy (role-based, not named people)
+export const POLICY_ROLES = [
+  "AI Governance Committee",
+  "Chief AI Officer",
+  "Chief Information Security Officer",
+  "Chief Privacy Officer / DPO",
+  "Chief Risk Officer",
+  "Chief Compliance Officer",
+  "General Counsel",
+  "Chief Technology Officer",
+  "Chief Human Resources Officer",
+  "Head of Internal Audit",
+];
+
+const rec = (o) => ({ ...o, closeKeys: o.closes.map(c => key(...c)), template: `/templates/${o.id}.docx` });
 
 export const RECOMMENDED_POLICIES = [
-  rec("rc-impact-assessment", "Impact Assessment Before High-Risk Deployment", "AI Governance", "REQUIRE APPROVAL",
-    "Agents used for consequential decisions (hiring, credit, housing, healthcare, essential services) cannot be activated until an AI impact assessment covering affected people, fundamental rights and societal effects is completed and approved.",
-    "Completed impact assessment (FRIA under the EU AI Act), approver sign-off, review date",
-    [["eu-ai-act", "Art. 27"], ["iso-42001", "A.5.2"], ["oecd", "1.1"]]),
-  rec("rc-bias-audit", "Bias Audit for Decision-Making Agents", "AI Governance", "BLOCK",
-    "Agents that screen, rank or score people must have a current independent bias audit. Use is blocked when the audit is missing or more than 12 months old.",
-    "Bias audit report with selection rates and impact ratios, auditor independence statement, published summary where required",
-    [["us-guidance", "NYC LL 144"], ["nist-ai-rmf", "MEASURE 2.11"]]),
-  rec("rc-ai-disclosure", "Disclose AI Interaction and Automated Decisions", "Transparency", "BLOCK",
-    "Customer- and candidate-facing agents must show a clear notice that the person is dealing with AI, and a notice when an automated system influences a consequential decision. Agents without a configured notice cannot go live.",
-    "Approved notice text per agent, screenshots of where it appears, notice delivery logs",
-    [["eu-ai-act", "Art. 50"], ["us-guidance", "CO SB 26-189", 0]]),
-  rec("rc-human-review", "Human Review of Adverse Automated Decisions", "Human Oversight", "REQUIRE APPROVAL",
-    "Any adverse decision about an individual that an agent made or materially influenced is routed to a qualified human reviewer on request, with a way to correct inaccurate data and contest the outcome.",
-    "Review request log, reviewer decisions and rationale, turnaround times",
-    [["us-guidance", "CO SB 26-189", 1], ["gdpr", "Art. 22"]]),
-  rec("rc-ai-literacy", "AI Literacy Training for Agent Owners", "AI Governance", "REQUIRE APPROVAL",
-    "Agent owners and operators must complete role-based AI literacy training before an agent they own can be activated, and refresh it annually.",
-    "Training curriculum, completion records per owner, annual refresh tracking",
-    [["eu-ai-act", "Art. 4"]]),
-  rec("rc-data-provenance", "Provenance Checks for Training and Retrieval Data", "AI Security", "REQUIRE APPROVAL",
-    "New datasets, fine-tuning data and knowledge sources connected to an agent need documented provenance, an integrity check and an owner before use. Changes to indexed content are logged.",
-    "Data source register, provenance and integrity check results, retrieval index change log",
-    [["owasp-llm", "LLM04"], ["owasp-llm", "LLM08"], ["mitre-atlas", "AML.T0070"]]),
-  rec("rc-output-validation", "Validate Agent Output Before Execution", "AI Security", "BLOCK",
-    "Agent output passed to code, queries, shells, browsers or downstream systems is validated and sanitized first. Generated code only runs in an isolated sandbox.",
-    "Validation rules per integration, sandbox configuration, blocked-output log",
-    [["owasp-llm", "LLM05"], ["owasp-agentic", "ASI05"]]),
-  rec("rc-memory-integrity", "Protect Agent Memory and Context", "AI Security", "BLOCK",
-    "Writes to an agent's persistent memory from untrusted content are quarantined for review. Memory is scoped per user and session and expires on a set schedule.",
-    "Memory write policy, quarantine log, retention settings",
-    [["owasp-agentic", "ASI06"], ["mitre-atlas", "AML.T0080"]]),
-  rec("rc-red-team", "Adversarial Testing Before Release", "AI Security", "REQUIRE APPROVAL",
-    "Agents must pass adversarial testing (prompt injection, jailbreak, data leakage, tool abuse) before activation and after significant changes. Findings above medium severity block release.",
-    "Test plan, red-team findings and remediation, retest results",
-    [["csa-aicm", "TVM"], ["csa-aismm", "Testing"]]),
-  rec("rc-agent-auth", "Authenticate Inter-Agent Communication", "AI Security", "BLOCK",
-    "Agent-to-agent calls require mutual authentication and signed messages. Messages from unregistered agents are rejected.",
-    "Agent identity and credential inventory, authentication configuration, rejected-message log",
-    [["owasp-agentic", "ASI07"]]),
-  rec("rc-grounding", "Grounding Checks for Factual Output", "AI Quality", "WARN",
-    "Factual answers must cite approved sources. Responses that can't be grounded are flagged to the user and logged for review.",
-    "Approved source list, grounding check results, flagged-response samples",
-    [["owasp-llm", "LLM09"]]),
-  rec("rc-change-control", "Change Approval for Agent Configuration", "Change Management", "REQUIRE APPROVAL",
-    "Changes to a production agent's model, system prompt, tools or permissions need approval and are recorded with before and after versions.",
-    "Change tickets with approvals, configuration version history",
-    [["soc2", "CC8.1"]]),
+  rec({
+    id: "rc-impact-assessment", name: "Impact Assessment Before High-Risk Deployment", tag: "AI Governance",
+    action: "REQUIRE APPROVAL", owner: "Chief AI Officer",
+    desc: "Agents used for consequential decisions (hiring, credit, housing, healthcare, essential services) cannot be activated until an AI impact assessment covering affected people, fundamental rights and societal effects is completed and approved.",
+    evidence: "Completed impact assessment (FRIA under the EU AI Act), approver sign-off, review date",
+    closes: [["eu-ai-act", "Art. 27"], ["iso-42001", "A.5.2"], ["oecd", "1.1"]],
+    statements: [
+      "Every AI agent must be classified at registration as consequential or non-consequential based on whether it makes or materially influences decisions about individuals in employment, credit, housing, insurance, healthcare, education or access to essential services.",
+      "A consequential agent must not be activated until an AI impact assessment has been completed and approved.",
+      "The assessment must identify affected individuals and groups, the intended purpose and context of use, foreseeable risks to fundamental rights and well-being, and the human oversight and mitigation measures in place.",
+      "Where the EU AI Act applies to a high-risk deployment, the assessment must meet the fundamental rights impact assessment requirements of Article 27.",
+      "Assessments must be reviewed at least annually and whenever the agent's purpose, model, data sources or affected population changes materially.",
+    ],
+  }),
+  rec({
+    id: "rc-bias-audit", name: "Bias Audit for Decision-Making Agents", tag: "AI Governance",
+    action: "BLOCK", owner: "Chief Human Resources Officer",
+    desc: "Agents that screen, rank or score people must have a current independent bias audit. Use is blocked when the audit is missing or more than 12 months old.",
+    evidence: "Bias audit report with selection rates and impact ratios, auditor independence statement, published summary where required",
+    closes: [["us-guidance", "NYC LL 144"], ["nist-ai-rmf", "MEASURE 2.11"]],
+    statements: [
+      "Any agent that screens, ranks, scores or recommends individuals for a consequential decision must have a bias audit completed within the past 12 months before it is used.",
+      "Audits must be performed by an independent auditor and must report selection or scoring rates and impact ratios across the demographic categories required by applicable law.",
+      "Where required by law (for example, New York City Local Law 144 for automated employment decision tools), a summary of the most recent audit must be published and candidates must receive the required notice.",
+      "Material disparities identified by an audit must be remediated, or the agent's use restricted, before continued use is approved.",
+      "ARGUS blocks use of the agent automatically when no current audit is on file.",
+    ],
+  }),
+  rec({
+    id: "rc-ai-disclosure", name: "Disclose AI Interaction and Automated Decisions", tag: "Transparency",
+    action: "BLOCK", owner: "Chief Privacy Officer / DPO",
+    desc: "Customer- and candidate-facing agents must show a clear notice that the person is dealing with AI, and a notice when an automated system influences a consequential decision. Agents without a configured notice cannot go live.",
+    evidence: "Approved notice text per agent, screenshots of where it appears, notice delivery logs",
+    closes: [["eu-ai-act", "Art. 50"], ["us-guidance", "CO SB 26-189", 0]],
+    statements: [
+      "Any agent that interacts directly with customers, candidates or the public must clearly disclose that the person is interacting with an AI system, unless this is obvious from context.",
+      "When an agent makes or materially influences a consequential decision about an individual, the individual must receive clear notice that automated decision-making technology was used.",
+      "AI-generated or manipulated content distributed externally must be labelled as such where required by law.",
+      "Notice text must be approved by the policy owner and Legal, and stored with the agent's registry record.",
+      "Customer-facing agents without an approved, configured notice must not be activated.",
+    ],
+  }),
+  rec({
+    id: "rc-human-review", name: "Human Review of Adverse Automated Decisions", tag: "Human Oversight",
+    action: "REQUIRE APPROVAL", owner: "Chief Compliance Officer",
+    desc: "Any adverse decision about an individual that an agent made or materially influenced is routed to a qualified human reviewer on request, with a way to correct inaccurate data and contest the outcome.",
+    evidence: "Review request log, reviewer decisions and rationale, turnaround times",
+    closes: [["us-guidance", "CO SB 26-189", 1], ["gdpr", "Art. 22"]],
+    statements: [
+      "Individuals affected by an adverse decision that an agent made or materially influenced must be told how to request human review.",
+      "Review requests must be handled by a qualified reviewer who has authority to change the outcome and who did not make the original decision.",
+      "Individuals must be able to correct inaccurate personal data used in the decision and to contest the outcome.",
+      "Decisions producing legal or similarly significant effects must not be based solely on automated processing unless a lawful basis and appropriate safeguards are in place.",
+      "Review requests, decisions, rationale and turnaround times must be logged and retained for at least three years.",
+    ],
+  }),
+  rec({
+    id: "rc-ai-literacy", name: "AI Literacy Training for Agent Owners", tag: "AI Governance",
+    action: "REQUIRE APPROVAL", owner: "Chief AI Officer",
+    desc: "Agent owners and operators must complete role-based AI literacy training before an agent they own can be activated, and refresh it annually.",
+    evidence: "Training curriculum, completion records per owner, annual refresh tracking",
+    closes: [["eu-ai-act", "Art. 4"]],
+    statements: [
+      "Every agent owner and operator must complete AI literacy training appropriate to their role before an agent they own or operate is activated.",
+      "Training must cover the capabilities and limitations of AI systems, the risks relevant to the agent's use case, this organization's AI policies, and how to exercise oversight and escalate issues.",
+      "Training must be refreshed at least annually and whenever a significant new AI capability or policy is introduced.",
+      "Completion records must be maintained per individual and checked by ARGUS at agent activation.",
+    ],
+  }),
+  rec({
+    id: "rc-data-provenance", name: "Provenance Checks for Training and Retrieval Data", tag: "AI Security",
+    action: "REQUIRE APPROVAL", owner: "Chief Information Security Officer",
+    desc: "New datasets, fine-tuning data and knowledge sources connected to an agent need documented provenance, an integrity check and an owner before use. Changes to indexed content are logged.",
+    evidence: "Data source register, provenance and integrity check results, retrieval index change log",
+    closes: [["owasp-llm", "LLM04"], ["owasp-llm", "LLM08"], ["mitre-atlas", "AML.T0070"]],
+    statements: [
+      "Every dataset, fine-tuning corpus and retrieval knowledge source used by an agent must be recorded in the data source register with its origin, owner, licence and sensitivity.",
+      "New or changed data sources must pass a provenance and integrity check before an agent can use them.",
+      "Retrieval indexes must enforce the access permissions of the underlying source documents, and access must be scoped per agent.",
+      "Additions, modifications and deletions to indexed content must be logged and attributable.",
+      "Suspected poisoning or unauthorized modification must be handled as a security incident.",
+    ],
+  }),
+  rec({
+    id: "rc-output-validation", name: "Validate Agent Output Before Execution", tag: "AI Security",
+    action: "BLOCK", owner: "Chief Information Security Officer",
+    desc: "Agent output passed to code, queries, shells, browsers or downstream systems is validated and sanitized first. Generated code only runs in an isolated sandbox.",
+    evidence: "Validation rules per integration, sandbox configuration, blocked-output log",
+    closes: [["owasp-llm", "LLM05"], ["owasp-agentic", "ASI05"]],
+    statements: [
+      "Agent output must be treated as untrusted input by every downstream system.",
+      "Output passed to interpreters, databases, shells, browsers or APIs must be validated and sanitized against rules defined for that integration.",
+      "Code generated by an agent may only be executed in an isolated sandbox with no access to production credentials or networks unless explicitly approved.",
+      "Output that fails validation must be blocked and logged.",
+    ],
+  }),
+  rec({
+    id: "rc-memory-integrity", name: "Protect Agent Memory and Context", tag: "AI Security",
+    action: "BLOCK", owner: "Chief Information Security Officer",
+    desc: "Writes to an agent's persistent memory from untrusted content are quarantined for review. Memory is scoped per user and session and expires on a set schedule.",
+    evidence: "Memory write policy, quarantine log, retention settings",
+    closes: [["owasp-agentic", "ASI06"], ["mitre-atlas", "AML.T0080"]],
+    statements: [
+      "Agent memory and persistent context must be scoped per user and per session so that one user's content cannot influence another's.",
+      "Writes to persistent memory that originate from untrusted content (web pages, emails, documents, tool output) must be quarantined for review.",
+      "Memory must expire on a defined retention schedule and be deletable on request.",
+      "Memory contents must be inspectable by the agent owner for investigation.",
+    ],
+  }),
+  rec({
+    id: "rc-red-team", name: "Adversarial Testing Before Release", tag: "AI Security",
+    action: "REQUIRE APPROVAL", owner: "Chief Information Security Officer",
+    desc: "Agents must pass adversarial testing (prompt injection, jailbreak, data leakage, tool abuse) before activation and after significant changes. Findings above medium severity block release.",
+    evidence: "Test plan, red-team findings and remediation, retest results",
+    closes: [["csa-aicm", "TVM"], ["csa-aismm", "Testing"]],
+    statements: [
+      "Every agent must undergo adversarial testing before activation and after any significant change to its model, prompts, tools or data sources.",
+      "Testing must cover at minimum prompt injection, jailbreaks, sensitive data leakage, tool misuse and excessive agency.",
+      "Findings rated above medium severity must be remediated and retested before release.",
+      "Test plans, findings and retest results must be retained with the agent's registry record.",
+    ],
+  }),
+  rec({
+    id: "rc-agent-auth", name: "Authenticate Inter-Agent Communication", tag: "AI Security",
+    action: "BLOCK", owner: "Chief Information Security Officer",
+    desc: "Agent-to-agent calls require mutual authentication and signed messages. Messages from unregistered agents are rejected.",
+    evidence: "Agent identity and credential inventory, authentication configuration, rejected-message log",
+    closes: [["owasp-agentic", "ASI07"]],
+    statements: [
+      "Every agent must have a unique, managed identity recorded in the agent registry.",
+      "Communication between agents must use mutual authentication, and messages must be integrity-protected.",
+      "Messages from unregistered or unauthenticated agents must be rejected and logged.",
+      "Agent credentials must be rotated on a defined schedule and revoked immediately when an agent is suspended.",
+    ],
+  }),
+  rec({
+    id: "rc-grounding", name: "Grounding Checks for Factual Output", tag: "AI Quality",
+    action: "WARN", owner: "Chief AI Officer",
+    desc: "Factual answers must cite approved sources. Responses that can't be grounded are flagged to the user and logged for review.",
+    evidence: "Approved source list, grounding check results, flagged-response samples",
+    closes: [["owasp-llm", "LLM09"]],
+    statements: [
+      "Agents that provide factual information to employees or customers must ground answers in an approved source list and cite the sources used.",
+      "Responses that cannot be grounded must be flagged to the user as unverified.",
+      "Flagged responses must be logged and sampled for review at a defined frequency.",
+      "Agents must not be used as the sole source for legal, medical or financial determinations.",
+    ],
+  }),
+  rec({
+    id: "rc-change-control", name: "Change Approval for Agent Configuration", tag: "Change Management",
+    action: "REQUIRE APPROVAL", owner: "Chief Technology Officer",
+    desc: "Changes to a production agent's model, system prompt, tools or permissions need approval and are recorded with before and after versions.",
+    evidence: "Change tickets with approvals, configuration version history",
+    closes: [["soc2", "CC8.1"]],
+    statements: [
+      "Changes to a production agent's model, model version, system prompt, tools, permissions or data sources must be requested, risk-assessed and approved before deployment.",
+      "Approvers must be independent of the person making the change.",
+      "Each change must be recorded with before and after configuration versions and linked to its approval.",
+      "Emergency changes must be approved retroactively within two business days.",
+    ],
+  }),
 ];
 
 export const recommendationFor = reqKey => RECOMMENDED_POLICIES.find(t => t.closeKeys.includes(reqKey));
@@ -348,7 +474,8 @@ export const SEED_REQ_MAP = Object.fromEntries(
 
 // Coverage for every framework given the current mapping and policy state
 export function computeCoverage(reqMap, policies) {
-  const enabled = new Set(policies.filter(p => p.enabled).map(p => p.id));
+  // a policy only counts as a control once it is enabled and approved (drafts don't count)
+  const enabled = new Set(policies.filter(p => p.enabled && p.status !== "draft").map(p => p.id));
   const isLive = ref => ref.startsWith("cap:") || enabled.has(ref);
 
   const frameworks = FRAMEWORKS.map(f => {
@@ -375,3 +502,6 @@ export function frameworksForPolicy(policy, reqMap) {
   ).map(f => f.short);
   return [...new Set([...linked, ...(policy.frameworks || [])])];
 }
+
+// Generic starting point when no recommended control fits
+export const BLANK_TEMPLATE = "/templates/argus-policy-template.docx";

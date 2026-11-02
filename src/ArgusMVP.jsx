@@ -3,12 +3,12 @@ import {
   Shield, Search, Bell, Activity, Users, FileText, AlertTriangle,
   ScanSearch, Cpu, HeartPulse, ShieldAlert, CheckCircle2, Download,
   X, Filter, Plus, Info, AlertOctagon, AlertCircle, Sun, Moon,
-  RotateCcw, MessageCircle, ExternalLink, Menu, Layers, Link2, ChevronRight, Lightbulb
+  RotateCcw, MessageCircle, ExternalLink, Menu, Layers, Link2, ChevronRight, Lightbulb, Upload, BadgeCheck, Clock
 } from "lucide-react";
 import * as d3 from "d3";
 import {
   FRAMEWORKS, FRAMEWORK_GROUPS, CAPABILITIES, SEED_REQ_MAP, RECOMMENDED_POLICIES,
-  computeCoverage, frameworksForPolicy, recommendationFor, reqLabel,
+  computeCoverage, frameworksForPolicy, recommendationFor, reqLabel, POLICY_ROLES, BLANK_TEMPLATE,
 } from "./frameworks.js";
 
 /* ---------------- seed data ---------------- */
@@ -28,19 +28,19 @@ const SEED_AGENTS = [
 const FEEDBACK_URL = "https://tally.so/r/YOUR-FORM-ID";
 
 const SEED_POLICIES = [
-  { id: "p1", tag: "Data Privacy", name: "Block PII Export to External APIs", desc: "Prevents any AI agent from sending personally identifiable information to external third-party APIs without explicit authorization.", action: "BLOCK", violations: 7, enabled: true, frameworks: [] },
-  { id: "p2", tag: "External Communication", name: "Require Approval for Outbound Emails", desc: "All agent-initiated outbound emails to external domains must receive human approval before sending.", action: "REQUIRE APPROVAL", violations: 3, enabled: true, frameworks: [] },
-  { id: "p3", tag: "HIPAA", name: "Restrict HIPAA Record Access", desc: "Agents without explicit HIPAA clearance are blocked from accessing health-related records.", action: "BLOCK", violations: 12, enabled: true, frameworks: [] },
-  { id: "p4", tag: "GDPR", name: "Audit Financial Data Reads", desc: "Log all agent access to financial systems for SOX compliance.", action: "AUDIT", violations: 0, enabled: true, frameworks: [] },
-  { id: "p5", tag: "Access Control", name: "Limit Full-Autonomy Agent Actions", desc: "Agents with full autonomy level require supervisor approval for any write operations.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [] },
-  { id: "p6", tag: "Access Control", name: "Block Admin Privilege Escalation", desc: "Prevents agents from acquiring admin permissions they were not originally granted.", action: "BLOCK", violations: 2, enabled: true, frameworks: [] },
-  { id: "p7", tag: "GDPR", name: "GDPR Data Deletion Compliance", desc: "Ensures agents processing EU customer data respect deletion requests within 72 hours.", action: "AUDIT", violations: 0, enabled: false, frameworks: [] },
-  { id: "p8", tag: "Custom", name: "Rate Limit External API Calls", desc: "Warns when an agent makes more than 1000 external API calls per hour.", action: "WARN", violations: 5, enabled: true, frameworks: [] },
-  { id: "p9", tag: "AI Security", name: "Prompt Injection Guardrail", desc: "Screens user input, retrieved documents and tool outputs for injected instructions, and blocks agent actions that originate from untrusted instructions.", action: "BLOCK", violations: 6, enabled: true, frameworks: [] },
-  { id: "p10", tag: "AI Security", name: "Least-Privilege Tool Scope", desc: "Each agent may only call tools on its approved allowlist. Calls outside that scope are held for human approval.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [] },
-  { id: "p11", tag: "AI Security", name: "Block System Prompt and Secret Leakage", desc: "Filters agent responses for system prompt contents, credentials and other secrets before they leave the platform.", action: "BLOCK", violations: 1, enabled: true, frameworks: [] },
-  { id: "p12", tag: "Incident Response", name: "Auto-Suspend Rogue Agents", desc: "Suspends an agent automatically after 3 critical violations within 6 hours and pages its owner. Reinstatement requires review.", action: "BLOCK", violations: 1, enabled: true, frameworks: [] },
-  { id: "p13", tag: "Third-Party Risk", name: "Vet Third-Party Models and Tools", desc: "New model providers, plugins and MCP tools must pass a security and provenance review before any agent can use them.", action: "REQUIRE APPROVAL", violations: 0, enabled: true, frameworks: [] },
+  { id: "p1", tag: "Data Privacy", name: "Block PII Export to External APIs", desc: "Prevents any AI agent from sending personally identifiable information to external third-party APIs without explicit authorization.", action: "BLOCK", violations: 7, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11" },
+  { id: "p2", tag: "External Communication", name: "Require Approval for Outbound Emails", desc: "All agent-initiated outbound emails to external domains must receive human approval before sending.", action: "REQUIRE APPROVAL", violations: 3, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11" },
+  { id: "p3", tag: "HIPAA", name: "Restrict HIPAA Record Access", desc: "Agents without explicit HIPAA clearance are blocked from accessing health-related records.", action: "BLOCK", violations: 12, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-01-20" },
+  { id: "p4", tag: "GDPR", name: "Audit Financial Data Reads", desc: "Log all agent access to financial systems for SOX compliance.", action: "AUDIT", violations: 0, enabled: true, frameworks: [], owner: "Chief Compliance Officer", status: "approved", approvedBy: "Head of Internal Audit", approvedOn: "2026-01-20" },
+  { id: "p5", tag: "Access Control", name: "Limit Full-Autonomy Agent Actions", desc: "Agents with full autonomy level require supervisor approval for any write operations.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-03-04" },
+  { id: "p6", tag: "Access Control", name: "Block Admin Privilege Escalation", desc: "Prevents agents from acquiring admin permissions they were not originally granted.", action: "BLOCK", violations: 2, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "Chief Risk Officer", approvedOn: "2026-01-20" },
+  { id: "p7", tag: "GDPR", name: "GDPR Data Deletion Compliance", desc: "Ensures agents processing EU customer data respect deletion requests within 72 hours.", action: "AUDIT", violations: 0, enabled: false, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-03-04" },
+  { id: "p8", tag: "Custom", name: "Rate Limit External API Calls", desc: "Warns when an agent makes more than 1000 external API calls per hour.", action: "WARN", violations: 5, enabled: true, frameworks: [], owner: "Chief Technology Officer", status: "approved", approvedBy: "Chief Information Security Officer", approvedOn: "2026-04-15" },
+  { id: "p9", tag: "AI Security", name: "Prompt Injection Guardrail", desc: "Screens user input, retrieved documents and tool outputs for injected instructions, and blocks agent actions that originate from untrusted instructions.", action: "BLOCK", violations: 6, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
+  { id: "p10", tag: "AI Security", name: "Least-Privilege Tool Scope", desc: "Each agent may only call tools on its approved allowlist. Calls outside that scope are held for human approval.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
+  { id: "p11", tag: "AI Security", name: "Block System Prompt and Secret Leakage", desc: "Filters agent responses for system prompt contents, credentials and other secrets before they leave the platform.", action: "BLOCK", violations: 1, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
+  { id: "p12", tag: "Incident Response", name: "Auto-Suspend Rogue Agents", desc: "Suspends an agent automatically after 3 critical violations within 6 hours and pages its owner. Reinstatement requires review.", action: "BLOCK", violations: 1, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
+  { id: "p13", tag: "Third-Party Risk", name: "Vet Third-Party Models and Tools", desc: "New model providers, plugins and MCP tools must pass a security and provenance review before any agent can use them.", action: "REQUIRE APPROVAL", violations: 0, enabled: true, frameworks: [], owner: "Chief Risk Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-06-10" },
 ];
 
 const SEED_AUDIT = [
@@ -316,31 +316,146 @@ function RegisterAgentModal({ onClose, onRegister }) {
 
 /* ---------------- create policy modal ---------------- */
 
-function CreatePolicyModal({ onClose, onCreate }) {
+const MAX_DOC_MB = 10;
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmtSize = b => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
+
+// Read an uploaded file into an in-memory link. Nothing leaves the browser.
+const toDocMeta = file => ({ name: file.name, size: file.size, url: URL.createObjectURL(file), uploadedOn: todayISO() });
+
+function DocUpload({ doc, onChange }) {
   const T = useT();
-  const [f, setF] = useState({ name: "", tag: "Access Control", desc: "", action: "BLOCK", frameworks: [] });
-  const set = (k, v) => setF(s => ({ ...s, [k]: v }));
+  const [err, setErr] = useState("");
+  const pick = e => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/\.(pdf|doc|docx)$/i.test(file.name)) { setErr("Upload a PDF or Word document."); return; }
+    if (file.size > MAX_DOC_MB * 1048576) { setErr(`Files must be ${MAX_DOC_MB} MB or smaller.`); return; }
+    setErr("");
+    onChange(toDocMeta(file));
+  };
+  return (
+    <div>
+      {doc ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 12px" }}>
+          <FileText size={16} color={T.blue} style={{ flexShrink: 0 }} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</div>
+            <div style={{ fontSize: 12, color: T.faint }}>{fmtSize(doc.size)}</div>
+          </div>
+          <button onClick={() => onChange(null)} aria-label="Remove document" style={{ background: "none", border: "none", color: T.dim, cursor: "pointer" }}><X size={16} /></button>
+        </div>
+      ) : (
+        <label style={{
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer",
+          border: `1px dashed ${T.blueBorder}`, borderRadius: 8, padding: "12px", color: T.blue, fontSize: 13.5, fontWeight: 600,
+          background: T.blueSoft,
+        }}>
+          <Upload size={15} /> Upload approved policy (PDF or Word)
+          <input type="file" accept=".pdf,.doc,.docx" onChange={pick} style={{ display: "none" }} />
+        </label>
+      )}
+      {err && <div style={{ color: T.isDark ? "#f43f5e" : "#e11d48", fontSize: 12.5, marginTop: 6 }}>{err}</div>}
+      <div style={{ color: T.faint, fontSize: 11.5, marginTop: 6, lineHeight: 1.45 }}>
+        Demo: the file stays in this browser tab and is cleared on refresh. Don't upload confidential documents.
+      </div>
+    </div>
+  );
+}
+
+// Approver picker + date, with a segregation-of-duties check against the owner
+function ApprovalFields({ owner, approvedBy, approvedOn, onChange }) {
+  const T = useT();
+  const sameAsOwner = approvedBy && approvedBy === owner;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "1fr" : "1.5fr 1fr", gap: 12 }}>
+      <div>
+        <label style={labelStyle(T)}>Approved by</label>
+        <select style={fieldStyle(T)} value={approvedBy} onChange={e => onChange({ approvedBy: e.target.value })}>
+          <option value="">Select approver…</option>
+          {POLICY_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+        {sameAsOwner && (
+          <div style={{ color: T.isDark ? "#f59e0b" : "#b45309", fontSize: 12.5, marginTop: 6, lineHeight: 1.45 }}>
+            The approver should be independent of the policy owner. Choose a different role.
+          </div>
+        )}
+      </div>
+      <div>
+        <label style={labelStyle(T)}>Approval date</label>
+        <input type="date" style={fieldStyle(T)} value={approvedOn} max={todayISO()} onChange={e => onChange({ approvedOn: e.target.value })} />
+      </div>
+    </div>
+  );
+}
+
+const CATEGORIES = ["Access Control", "AI Governance", "AI Security", "AI Quality", "Change Management", "Data Privacy",
+  "External Communication", "GDPR", "HIPAA", "Human Oversight", "Incident Response", "Third-Party Risk", "Transparency", "Custom"];
+
+function CreatePolicyModal({ onClose, onCreate, initialTemplate, policies }) {
+  const T = useT();
+  const blank = { templateId: "", name: "", tag: "Access Control", desc: "", action: "BLOCK", owner: "", frameworks: [], doc: null, approved: false, approvedBy: "", approvedOn: todayISO() };
+  const fromTemplate = id => {
+    const t = RECOMMENDED_POLICIES.find(x => x.id === id);
+    return t ? { templateId: t.id, name: t.name, tag: t.tag, desc: t.desc, action: t.action, owner: t.owner } : { templateId: "" };
+  };
+  const [f, setF] = useState(() => ({ ...blank, ...fromTemplate(initialTemplate) }));
+  const set = patch => setF(s => ({ ...s, ...patch }));
   const toggleFw = fw => setF(s => ({
     ...s, frameworks: s.frameworks.includes(fw) ? s.frameworks.filter(x => x !== fw) : [...s.frameworks, fw],
   }));
-  const valid = f.name.trim() && f.desc.trim();
+
+  const tpl = RECOMMENDED_POLICIES.find(x => x.id === f.templateId);
+  const adopted = new Set(policies.map(p => p.id));
+  const approvalOk = !f.approved || (f.approvedBy && f.approvedBy !== f.owner && f.approvedOn);
+  const valid = f.name.trim() && f.desc.trim() && f.owner && approvalOk;
+
   return (
-    <Modal title="Create Policy" subtitle="New policies are enabled immediately and count toward the compliance score." onClose={onClose}>
+    <Modal title="Create Policy" subtitle="Start from a template or write your own. A policy counts toward framework coverage once it is approved." onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
+          <label style={labelStyle(T)}>Start from a template</label>
+          <select style={fieldStyle(T)} value={f.templateId} onChange={e => set(e.target.value ? fromTemplate(e.target.value) : { templateId: "" })}>
+            <option value="">Blank policy</option>
+            {RECOMMENDED_POLICIES.map(t => (
+              <option key={t.id} value={t.id} disabled={adopted.has(t.id)}>{t.name}{adopted.has(t.id) ? " (already added)" : ""}</option>
+            ))}
+          </select>
+          <div style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", marginTop: 8 }}>
+            {tpl ? (
+              <>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700 }}>Closes:</span>
+                  {tpl.closeKeys.map(k => <Pill key={k} small fg={T.dim} bg={T.panel} border={T.border}>{reqLabel(k)}</Pill>)}
+                </div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 6 }}>
+                  <span style={{ fontWeight: 700 }}>Evidence to retain: </span><span style={{ color: T.dim }}>{tpl.evidence}</span>
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 12.5, color: T.dim }}>No template selected. Use the general template to draft the document.</div>
+            )}
+            <a href={tpl ? tpl.template : BLANK_TEMPLATE} download style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, color: T.blue, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+              <Download size={14} /> Download {tpl ? "policy template" : "general policy template"} (.docx)
+            </a>
+          </div>
+        </div>
+
+        <div>
           <label style={labelStyle(T)}>Policy name</label>
-          <input style={fieldStyle(T)} value={f.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Require Model Card Before Activation" />
+          <input style={fieldStyle(T)} value={f.name} onChange={e => set({ name: e.target.value })} placeholder="e.g. Require Model Card Before Activation" />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "1fr" : "1fr 1fr", gap: 14 }}>
           <div>
             <label style={labelStyle(T)}>Category</label>
-            <select style={fieldStyle(T)} value={f.tag} onChange={e => set("tag", e.target.value)}>
-              {["Access Control", "Data Privacy", "External Communication", "GDPR", "HIPAA", "Model Governance", "Custom"].map(t => <option key={t}>{t}</option>)}
+            <select style={fieldStyle(T)} value={f.tag} onChange={e => set({ tag: e.target.value })}>
+              {CATEGORIES.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div>
             <label style={labelStyle(T)}>Enforcement action</label>
-            <select style={fieldStyle(T)} value={f.action} onChange={e => set("action", e.target.value)}>
+            <select style={fieldStyle(T)} value={f.action} onChange={e => set({ action: e.target.value })}>
               {["BLOCK", "REQUIRE APPROVAL", "WARN", "AUDIT"].map(a => <option key={a}>{a}</option>)}
             </select>
           </div>
@@ -348,33 +463,93 @@ function CreatePolicyModal({ onClose, onCreate }) {
         <div>
           <label style={labelStyle(T)}>Description</label>
           <textarea rows={3} style={{ ...fieldStyle(T), resize: "vertical", fontFamily: "inherit" }} value={f.desc}
-            onChange={e => set("desc", e.target.value)} placeholder="What behavior does this policy govern, and when does it trigger?" />
+            onChange={e => set({ desc: e.target.value })} placeholder="What behavior does this policy govern, and when does it trigger?" />
         </div>
         <div>
-          <label style={labelStyle(T)}>Framework mapping</label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {FRAMEWORKS.map(fw => fw.short).map(fw => {
-              const on = f.frameworks.includes(fw);
-              return (
-                <button key={fw} onClick={() => toggleFw(fw)} style={{
-                  fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 999, cursor: "pointer",
-                  background: on ? T.blueSoft : T.panelSoft,
-                  border: `1px solid ${on ? T.blue : T.border}`,
-                  color: on ? T.blue : T.dim, transition: "all .12s",
-                }}>{fw}</button>
-              );
-            })}
-          </div>
-          <div style={{ color: T.faint, fontSize: 12, marginTop: 8 }}>
-            Tag which compliance frameworks this control supports. Mapped policies roll up into framework coverage.
-          </div>
+          <label style={labelStyle(T)}>Policy owner</label>
+          <select style={fieldStyle(T)} value={f.owner} onChange={e => set({ owner: e.target.value })}>
+            <option value="">Select the accountable role…</option>
+            {POLICY_ROLES.map(r => <option key={r} value={r}>{r}{tpl && tpl.owner === r ? " (suggested)" : ""}</option>)}
+          </select>
         </div>
+
+        <div>
+          <label style={labelStyle(T)}>Policy document</label>
+          <DocUpload doc={f.doc} onChange={doc => set({ doc })} />
+        </div>
+
+        <div style={{ border: `1px solid ${f.approved ? T.blueBorder : T.border}`, borderRadius: 10, padding: "12px 14px", background: f.approved ? T.blueSoft : "transparent" }}>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+            <input type="checkbox" checked={f.approved} onChange={e => set({ approved: e.target.checked })}
+              style={{ width: 17, height: 17, marginTop: 1, accentColor: T.blue, flexShrink: 0 }} />
+            <span>
+              <span style={{ fontSize: 14, fontWeight: 700, display: "block" }}>This policy has been approved</span>
+              <span style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.45, display: "block", marginTop: 2 }}>
+                {f.approved
+                  ? (f.doc ? "The uploaded document will be kept as approval evidence." : "Tip: upload the signed document above as approval evidence.")
+                  : "Leave unchecked to save as a draft. Drafts don't count toward coverage until approved."}
+              </span>
+            </span>
+          </label>
+          {f.approved && (
+            <div style={{ marginTop: 12 }}>
+              <ApprovalFields owner={f.owner} approvedBy={f.approvedBy} approvedOn={f.approvedOn} onChange={set} />
+            </div>
+          )}
+        </div>
+
+        {!tpl && (
+          <div>
+            <label style={labelStyle(T)}>Framework tags</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {FRAMEWORKS.map(fw => fw.short).map(fw => {
+                const on = f.frameworks.includes(fw);
+                return (
+                  <button key={fw} onClick={() => toggleFw(fw)} style={{
+                    fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 999, cursor: "pointer",
+                    background: on ? T.blueSoft : T.panelSoft, border: `1px solid ${on ? T.blue : T.border}`,
+                    color: on ? T.blue : T.dim, transition: "all .12s",
+                  }}>{fw}</button>
+                );
+              })}
+            </div>
+            <div style={{ color: T.faint, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>
+              Tags group the policy by framework. To count toward coverage, map it to a specific requirement from the Frameworks page.
+            </div>
+          </div>
+        )}
+
         <button disabled={!valid} onClick={() => onCreate(f)} style={{
           background: valid ? T.blue : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
           border: "none", borderRadius: 9, padding: "12px 16px", fontSize: 15, fontWeight: 700,
           cursor: valid ? "pointer" : "not-allowed", marginTop: 4,
         }}>
-          Create policy
+          {f.approved ? "Create approved policy" : "Save as draft"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function ApprovePolicyModal({ policy, onClose, onApprove }) {
+  const T = useT();
+  const [a, setA] = useState({ approvedBy: "", approvedOn: todayISO(), doc: policy.doc || null });
+  const set = patch => setA(s => ({ ...s, ...patch }));
+  const valid = a.approvedBy && a.approvedBy !== policy.owner && a.approvedOn;
+  return (
+    <Modal title="Approve policy" subtitle={`${policy.name}. Once approved, it counts toward every framework requirement it is mapped to.`} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ fontSize: 13.5, color: T.dim }}>Policy owner: <b style={{ color: T.text }}>{policy.owner}</b></div>
+        <ApprovalFields owner={policy.owner} approvedBy={a.approvedBy} approvedOn={a.approvedOn} onChange={set} />
+        <div>
+          <label style={labelStyle(T)}>Approved document</label>
+          <DocUpload doc={a.doc} onChange={doc => set({ doc })} />
+        </div>
+        <button disabled={!valid} onClick={() => onApprove(policy.id, a)} style={{
+          background: valid ? T.blue : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
+          border: "none", borderRadius: 9, padding: "12px 16px", fontSize: 15, fontWeight: 700, cursor: valid ? "pointer" : "not-allowed",
+        }}>
+          Approve policy
         </button>
       </div>
     </Modal>
@@ -619,7 +794,46 @@ function Registry({ agents, openAgent, onOpenRegister }) {
   );
 }
 
-function PolicyEngine({ policies, reqMap, toggle, onOpenCreate }) {
+function PolicyMeta({ p, onApprove }) {
+  const T = useT();
+  const amber = T.isDark ? "#f59e0b" : "#b45309";
+  const green = T.isDark ? "#34d399" : "#059669";
+  const tpl = RECOMMENDED_POLICIES.find(t => t.id === p.templateId);
+  const link = { display: "inline-flex", alignItems: "center", gap: 5, color: T.blue, fontSize: 12.5, fontWeight: 600, textDecoration: "none", maxWidth: "100%" };
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px dashed ${T.border}`, display: "flex", flexDirection: "column", gap: 7, fontSize: 12.5 }}>
+      {p.owner && <div style={{ color: T.dim }}>Owner: <span style={{ color: T.text, fontWeight: 600 }}>{p.owner}</span></div>}
+      {p.status === "draft" ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: amber, fontWeight: 700 }}>
+            <Clock size={13} /> Draft, pending approval
+          </span>
+          <button onClick={() => onApprove(p.id)} style={{ fontSize: 12.5, fontWeight: 700, padding: "4px 10px", borderRadius: 7, cursor: "pointer", background: T.blue, color: "#fff", border: "none" }}>
+            Approve
+          </button>
+        </div>
+      ) : p.approvedBy && (
+        <div style={{ display: "flex", alignItems: "center", gap: 5, color: T.dim }}>
+          <BadgeCheck size={14} color={green} style={{ flexShrink: 0 }} />
+          <span>Approved by <span style={{ color: T.text, fontWeight: 600 }}>{p.approvedBy}</span> · <span style={{ whiteSpace: "nowrap" }}>{p.approvedOn}</span></span>
+        </div>
+      )}
+      {(p.doc || tpl) && (
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+          {p.doc && (
+            <a href={p.doc.url} download={p.doc.name} style={link} title={p.doc.name}>
+              <FileText size={13} style={{ flexShrink: 0 }} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.doc.name}</span>
+            </a>
+          )}
+          {tpl && <a href={tpl.template} download style={link}><Download size={13} /> Template</a>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PolicyEngine({ policies, reqMap, toggle, onOpenCreate, onApprove }) {
   const T = useT();
   const [group, setGroup] = useState("all");
   const [action, setAction] = useState("all");
@@ -709,6 +923,7 @@ function PolicyEngine({ policies, reqMap, toggle, onOpenCreate }) {
                     )}
                   </div>
                 )}
+                <PolicyMeta p={p} onApprove={onApprove} />
               </div>
               <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <Pill fg={a.fg} bg={a.bg}>Action: {p.action}</Pill>
@@ -883,12 +1098,19 @@ function RecommendedControl({ tpl, reqKey, gapKeys, policies, onAdopt }) {
           {alsoCloses.map(l => <Pill key={l} small fg={T.dim} bg={T.panelSoft} border={T.border}>{l}</Pill>)}
         </div>
       )}
-      <button onClick={() => onAdopt(tpl)} style={{
-        display: "flex", alignItems: "center", gap: 6, marginTop: 11, fontSize: 13, fontWeight: 700,
-        padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: T.blue, color: "#fff", border: "none",
-      }}>
-        <Plus size={14} /> {existing ? (existing.enabled ? "Map this policy" : "Enable and map this policy") : "Add policy and map"}
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 11 }}>
+        <button onClick={() => onAdopt(tpl)} style={{
+          display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
+          padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: T.blue, color: "#fff", border: "none",
+        }}>
+          {existing
+            ? (existing.status === "draft" ? <><BadgeCheck size={14} /> Approve this policy</> : <><Plus size={14} /> {existing.enabled ? "Map this policy" : "Enable and map this policy"}</>)
+            : <><Plus size={14} /> Create from template</>}
+        </button>
+        <a href={tpl.template} download style={{ display: "inline-flex", alignItems: "center", gap: 6, color: T.blue, fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+          <Download size={14} /> Download template (.docx)
+        </a>
+      </div>
     </div>
   );
 }
@@ -934,12 +1156,22 @@ function RecommendationPlan({ gapKeys, policies, onAdopt, totalGaps }) {
                   {open.map(k => <Pill key={k} small fg={T.dim} bg={T.panel} border={T.border}>{reqLabel(k)}</Pill>)}
                 </div>
               </div>
-              <button onClick={() => onAdopt(t)} style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13, fontWeight: 700,
-                padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: T.blue, color: "#fff", border: "none", whiteSpace: "nowrap",
-              }}>
-                <Plus size={14} /> {existing ? "Enable and map" : "Add and map"}
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <a href={t.template} download aria-label={`Download ${t.name} template`} title="Download template (.docx)" style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 10px", borderRadius: 8,
+                  border: `1px solid ${T.blueBorder}`, color: T.blue, fontSize: 13, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap",
+                  flex: T.mobile ? 1 : "none",
+                }}>
+                  <Download size={14} />{T.mobile && " Template"}
+                </a>
+                <button onClick={() => onAdopt(t)} style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13, fontWeight: 700,
+                  padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: T.blue, color: "#fff", border: "none", whiteSpace: "nowrap",
+                  flex: T.mobile ? 1 : "none",
+                }}>
+                  {existing?.status === "draft" ? <><BadgeCheck size={14} /> Approve</> : <><Plus size={14} /> {existing ? "Enable and map" : "Create"}</>}
+                </button>
+              </div>
             </div>
           );
         })}
@@ -953,7 +1185,7 @@ function RecommendationPlan({ gapKeys, policies, onAdopt, totalGaps }) {
   );
 }
 
-function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogglePolicy, onAdopt }) {
+function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogglePolicy, onAdopt, onApprove }) {
   const T = useT();
   const [linking, setLinking] = useState(null);
   if (!framework) return null;
@@ -1009,8 +1241,8 @@ function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogg
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                         {caps.map(c => <Pill key={c} small fg={T.dim} bg={T.panel} border={T.border}>{c}</Pill>)}
                         {linkedPolicies.map(p => (
-                          <Pill key={p.id} small fg={p.enabled ? T.blue : T.faint} bg={p.enabled ? T.blueSoft : T.panel} border={p.enabled ? T.blueBorder : T.border}>
-                            {p.name}{p.enabled ? "" : " (off)"}
+                          <Pill key={p.id} small fg={p.enabled && p.status !== "draft" ? T.blue : T.faint} bg={p.enabled && p.status !== "draft" ? T.blueSoft : T.panel} border={p.enabled && p.status !== "draft" ? T.blueBorder : T.border}>
+                            {p.name}{p.status === "draft" ? " (draft)" : p.enabled ? "" : " (off)"}
                           </Pill>
                         ))}
                       </div>
@@ -1018,7 +1250,9 @@ function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogg
 
                     {!req.covered && (
                       <div style={{ fontSize: 12.5, color: amber, marginTop: 8, lineHeight: 1.45 }}>
-                        {disabledOnly ? "Gap: the mapped policy is disabled." : "Gap: no control mapped yet."}
+                        {!disabledOnly ? "Gap: no control mapped yet."
+                          : linkedPolicies.some(p => p.status === "draft") ? "Gap: the mapped policy is awaiting approval."
+                          : "Gap: the mapped policy is disabled."}
                       </div>
                     )}
 
@@ -1029,7 +1263,12 @@ function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogg
 
                     {!req.covered && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                        {disabledOnly && linkedPolicies.filter(p => !p.enabled).map(p => (
+                        {disabledOnly && linkedPolicies.filter(p => p.status === "draft").map(p => (
+                          <button key={`a-${p.id}`} onClick={() => onApprove(p.id)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: T.blue, color: "#fff", border: "none" }}>
+                            <BadgeCheck size={13} /> Approve {p.name}
+                          </button>
+                        ))}
+                        {disabledOnly && linkedPolicies.filter(p => !p.enabled && p.status !== "draft").map(p => (
                           <button key={p.id} onClick={() => onTogglePolicy(p.id)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: T.blue, color: "#fff", border: "none" }}>
                             Enable {p.name}
                           </button>
@@ -1389,6 +1628,8 @@ export default function ArgusMVP() {
   const [detail, setDetail] = useState(null);
   const [fwOpen, setFwOpen] = useState(null);
   const [modal, setModal] = useState(null);
+  const [policyTemplate, setPolicyTemplate] = useState(null);
+  const [approving, setApproving] = useState(null);
   const [globalQ, setGlobalQ] = useState("");
   const [toast, setToast] = useState(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -1422,6 +1663,8 @@ export default function ArgusMVP() {
     setReqMap(SEED_REQ_MAP);
     setDetail(null);
     setFwOpen(null);
+    setModal(null);
+    setApproving(null);
     notify("Demo data reset to its original state");
   };
 
@@ -1443,26 +1686,35 @@ export default function ArgusMVP() {
     }
   };
 
-  // Create (or re-enable) a recommended policy and map it to every requirement it satisfies
+  const openCreatePolicy = (templateId = null) => { setPolicyTemplate(templateId); setModal("policy"); };
+
+  // From a recommendation: approve a draft, re-enable a disabled policy, or open the form pre-filled from the template
   const adoptRecommendation = tpl => {
     const existing = policies.find(p => p.id === tpl.id);
+    if (!existing) return openCreatePolicy(tpl.id);
+    if (existing.status === "draft") return setApproving(existing.id);
     const closing = tpl.closeKeys.filter(k => gapKeys.has(k));
-    if (existing) {
-      if (!existing.enabled) setPolicies(ps => ps.map(p => p.id === tpl.id ? { ...p, enabled: true } : p));
-    } else {
-      setPolicies(ps => [...ps, {
-        id: tpl.id, tag: tpl.tag, name: tpl.name, desc: tpl.desc, action: tpl.action,
-        violations: 0, enabled: true, frameworks: [], evidence: tpl.evidence,
-      }]);
-    }
+    if (!existing.enabled) setPolicies(ps => ps.map(p => p.id === tpl.id ? { ...p, enabled: true } : p));
     setReqMap(m => {
       const next = { ...m };
       tpl.closeKeys.forEach(k => { if (!(next[k] || []).includes(tpl.id)) next[k] = [...(next[k] || []), tpl.id]; });
       return next;
     });
-    log("info", existing ? "Policy Change" : "Policy Created", "—",
-      `Recommended policy "${tpl.name}" ${existing ? "enabled and mapped" : "added"}; closes ${closing.map(reqLabel).join(", ") || "no open gaps"}`);
-    notify(`${tpl.name} added. Closed ${closing.length} gap${closing.length === 1 ? "" : "s"}.`);
+    log("info", "Policy Change", "—", `"${tpl.name}" enabled and mapped; closes ${closing.map(reqLabel).join(", ") || "no open gaps"}`);
+    notify(`${tpl.name} enabled. Closed ${closing.length} gap${closing.length === 1 ? "" : "s"}.`);
+  };
+
+  const approvePolicy = (id, a) => {
+    const p = policies.find(x => x.id === id);
+    if (!p) return;
+    const tpl = RECOMMENDED_POLICIES.find(t => t.id === (p.templateId || p.id));
+    const keys = Object.entries(reqMap).filter(([, refs]) => refs.includes(id)).map(([k]) => k);
+    const closing = keys.filter(k => gapKeys.has(k));
+    setPolicies(ps => ps.map(x => x.id === id ? { ...x, status: "approved", approvedBy: a.approvedBy, approvedOn: a.approvedOn, doc: a.doc || x.doc } : x));
+    if (a.doc && a.doc !== p.doc) log("info", "Document Uploaded", "—", `"${a.doc.name}" attached to policy "${p.name}"`);
+    log("info", "Policy Approved", "—", `Policy "${p.name}" approved by ${a.approvedBy} on ${a.approvedOn}${closing.length ? `; closes ${closing.map(reqLabel).join(", ")}` : ""}`);
+    setApproving(null);
+    notify(closing.length ? `Approved. Closed ${closing.length} gap${closing.length === 1 ? "" : "s"}.` : `Policy approved by ${a.approvedBy}`);
   };
 
   const openAgent = name => {
@@ -1484,14 +1736,31 @@ export default function ArgusMVP() {
   };
 
   const createPolicy = f => {
+    const tpl = RECOMMENDED_POLICIES.find(t => t.id === f.templateId);
+    const id = tpl && !policies.some(p => p.id === tpl.id) ? tpl.id : `p${Date.now()}`;
+    const approved = f.approved;
     const newPolicy = {
-      id: `p${Date.now()}`, tag: f.tag, name: f.name.trim(), desc: f.desc.trim(),
-      action: f.action, violations: 0, enabled: true, frameworks: f.frameworks,
+      id, tag: f.tag, name: f.name.trim(), desc: f.desc.trim(), action: f.action, violations: 0, enabled: true,
+      frameworks: tpl ? [] : f.frameworks, owner: f.owner, templateId: tpl?.id, evidence: tpl?.evidence, doc: f.doc,
+      status: approved ? "approved" : "draft",
+      ...(approved ? { approvedBy: f.approvedBy, approvedOn: f.approvedOn } : {}),
     };
     setPolicies(ps => [...ps, newPolicy]);
-    log("info", "Policy Created", "—", `Policy "${newPolicy.name}" created with enforcement action ${newPolicy.action}`);
+    // a template carries its requirement mapping with it
+    if (tpl) setReqMap(m => {
+      const next = { ...m };
+      tpl.closeKeys.forEach(k => { if (!(next[k] || []).includes(id)) next[k] = [...(next[k] || []), id]; });
+      return next;
+    });
+    const closing = tpl ? tpl.closeKeys.filter(k => gapKeys.has(k)) : [];
+    log("info", "Policy Created", "—", `Policy "${newPolicy.name}" created as ${approved ? "approved" : "draft"} (owner: ${f.owner}, action: ${f.action})${tpl ? `; mapped to ${tpl.closeKeys.map(reqLabel).join(", ")}` : ""}`);
+    if (f.doc) log("info", "Document Uploaded", "—", `"${f.doc.name}" attached to policy "${newPolicy.name}"`);
+    if (approved) log("info", "Policy Approved", "—", `Policy "${newPolicy.name}" approved by ${f.approvedBy} on ${f.approvedOn}`);
     setModal(null);
-    notify(`Policy created: ${newPolicy.name}`);
+    setPolicyTemplate(null);
+    notify(approved
+      ? (closing.length ? `Policy approved. Closed ${closing.length} gap${closing.length === 1 ? "" : "s"}.` : `Policy created: ${newPolicy.name}`)
+      : `Saved as draft.${closing.length ? ` Approve it to close ${closing.length} gap${closing.length === 1 ? "" : "s"}.` : ""}`);
   };
 
   const go = id => { setView(id); setNavOpen(false); };
@@ -1632,7 +1901,7 @@ export default function ArgusMVP() {
           <main style={{ padding: mobile ? "18px 16px 96px" : 28, minWidth: 0 }}>
             {view === "dashboard" && <Dashboard agents={agents} coverage={coverage} openAgent={openAgent} onOpenFrameworks={() => go("frameworks")} />}
             {view === "registry" && <Registry agents={agents} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
-            {view === "policy" && <PolicyEngine policies={policies} reqMap={reqMap} toggle={togglePolicy} onOpenCreate={() => setModal("policy")} />}
+            {view === "policy" && <PolicyEngine policies={policies} reqMap={reqMap} toggle={togglePolicy} onOpenCreate={() => openCreatePolicy()} onApprove={setApproving} />}
             {view === "frameworks" && <Frameworks coverage={coverage} gapKeys={gapKeys} policies={policies} onOpen={setFwOpen} onAdopt={adoptRecommendation} />}
             {view === "audit" && <AuditTrail audit={audit} />}
             {view === "heatmap" && <Heatmap agents={agents} openAgent={openAgent} />}
@@ -1640,10 +1909,14 @@ export default function ArgusMVP() {
         </div>
 
         {modal === "register" && <RegisterAgentModal onClose={() => setModal(null)} onRegister={registerAgent} />}
-        {modal === "policy" && <CreatePolicyModal onClose={() => setModal(null)} onCreate={createPolicy} />}
+        {modal === "policy" && <CreatePolicyModal onClose={() => { setModal(null); setPolicyTemplate(null); }} onCreate={createPolicy}
+          initialTemplate={policyTemplate} policies={policies} />}
+        {approving && policies.find(p => p.id === approving) && (
+          <ApprovePolicyModal policy={policies.find(p => p.id === approving)} onClose={() => setApproving(null)} onApprove={approvePolicy} />
+        )}
         <AgentDrawer agent={detail} audit={audit} onClose={() => setDetail(null)} />
         <FrameworkDrawer framework={openFramework} policies={policies} gapKeys={gapKeys} onClose={() => setFwOpen(null)}
-          onLink={linkPolicy} onTogglePolicy={togglePolicy} onAdopt={adoptRecommendation} />
+          onLink={linkPolicy} onTogglePolicy={togglePolicy} onAdopt={adoptRecommendation} onApprove={setApproving} />
 
         <button onClick={() => setFeedbackOpen(true)} aria-label="Send feedback" style={{
           position: "fixed", bottom: mobile ? 16 : 24, right: mobile ? 16 : 24, zIndex: 45,

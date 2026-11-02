@@ -18,7 +18,7 @@ const tr = (...ids) => Object.fromEntries(ids.map(id => [id, true]));
 const SEED_AGENTS = [
   { id: 1, name: "Aria CX Bot", model: "gpt-4o", dept: "Customer Success", status: "active", risk: "LOW", score: 18, autonomy: "Supervised", owner: "CX Ops",
     desc: "Answers customer support questions in chat for customers in the US and EU, looks up order and account status, and hands off to a human agent when it can't resolve an issue.",
-    traits: tr("customerFacing", "personalData", "euScope", "tools", "retrieval"), exclusions: {} },
+    traits: tr("customerFacing", "personalData", "euScope", "tools", "retrieval", "persistentMemory"), exclusions: {} },
   { id: 2, name: "DataSync Pro", model: "claude-3-5-sonnet", dept: "Engineering", status: "active", risk: "MEDIUM", score: 42, autonomy: "Semi-autonomous", owner: "Platform Eng",
     desc: "Reconciles customer and billing records between the CRM, data warehouse and finance systems overnight, and opens tickets for records it can't match.",
     traits: tr("personalData", "financialData", "tools"), exclusions: {} },
@@ -33,13 +33,19 @@ const SEED_AGENTS = [
     traits: tr("personalData", "euScope", "financialData", "externalComms", "tools"), exclusions: {} },
   { id: 6, name: "MarketSentinel", model: "claude-3-5-sonnet", dept: "Marketing", status: "active", risk: "MEDIUM", score: 35, autonomy: "Supervised", owner: "Growth",
     desc: "Monitors competitor news and social channels, summarizes trends, and drafts campaign copy that marketers review before publishing.",
-    traits: tr("externalComms", "tools", "retrieval"), exclusions: {} },
+    traits: tr("externalComms", "tools", "retrieval", "sharedOutput"), exclusions: {} },
   { id: 7, name: "CodeReview AI", model: "gpt-4o", dept: "Engineering", status: "active", risk: "LOW", score: 22, autonomy: "Supervised", owner: "Dev Experience",
     desc: "Reviews pull requests, suggests fixes, and runs generated tests in CI. Suggestions are applied only after an engineer approves them.",
     traits: tr("codeExec", "tools", "retrieval"), exclusions: {} },
   { id: 8, name: "LegalScan Bot", model: "claude-3-5-sonnet", dept: "Legal", status: "pending", risk: "MEDIUM", score: 38, autonomy: "Supervised", owner: "Legal Ops",
     desc: "Reviews incoming vendor contracts against the legal playbook and flags non-standard clauses for counsel. Pending security review before activation.",
     traits: tr("personalData", "euScope", "retrieval"), exclusions: {} },
+  { id: 9, name: "JobFit", model: "Claude (claude.ai skill)", dept: "Personal Projects", status: "pending", risk: "LOW", score: 20, autonomy: "Supervised", owner: "John Smith",
+    desc: "Tailors a candidate's resume to a specific job posting. Fetches the posting from the web, scores fit from a recruiter's perspective, stops to ask the candidate about information gaps before rewriting, and produces an editable DOCX resume. Must never invent employers, dates, credentials, skills or metrics.",
+    traits: tr("personalData", "tools", "codeExec", "sharedOutput"), exclusions: {} },
+  { id: 10, name: "ClaimsGuide", model: "claude-3-5-sonnet", dept: "Operations", status: "pending", risk: "HIGH", score: 58, autonomy: "Semi-autonomous", owner: "Claims Ops",
+    desc: "Helps health-plan members in the US and EU file and track medical claims. Checks eligibility against plan documents, recommends approve or deny to claims examiners, pays approved claims through the payments API, sends members decision letters, remembers each member's claim history, and hands suspicious claims to the fraud-detection agent.",
+    traits: tr("consequential", "customerFacing", "personalData", "euScope", "healthData", "financialData", "externalComms", "sharedOutput", "tools", "retrieval", "multiAgent", "persistentMemory"), exclusions: {} },
 ];
 
 // TODO: replace with your real form link (Tally / Google Form) before deploying
@@ -62,6 +68,8 @@ const SEED_POLICIES = [
 ];
 
 const SEED_AUDIT = [
+  { sev: "info", ts: "11/2/2026, 3:10:00 PM", type: "Agent Registered", agent: "ClaimsGuide", desc: "ClaimsGuide registered and pending security review before activation" },
+  { sev: "info", ts: "11/2/2026, 3:05:00 PM", type: "Agent Registered", agent: "JobFit", desc: "JobFit registered and pending security review before activation" },
   { sev: "critical", ts: "5/21/2026, 11:42:25 AM", type: "Policy Violation", agent: "ThreatWatch AI", desc: "ThreatWatch AI exceeded external API rate limit — 1,247 calls in 60 minutes" },
   { sev: "critical", ts: "5/21/2026, 10:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha accessed 3,400 EU customer PII records without GDPR deletion check" },
   { sev: "warn", ts: "5/21/2026, 8:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha sent outbound emails to external vendors without approval" },

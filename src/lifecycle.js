@@ -11,19 +11,19 @@
  * after a suspension is a hard gate: every item must be met first.
  */
 import { isResolved } from "./riskLibrary.js";
+import { DEFAULT_GATES, TREATED, operatingState } from "./gates.js";
 
 export const CONDITION_MAX_DAYS = 90;
 export const PROBATION_DAYS = 30;
-const TREATED = ["Accept", "Transfer", "Avoid"];
 
 export const agentViolations = (agent, audit) =>
   audit.filter(e => e.agent === agent.name && e.type === "Policy Violation" && e.id);
 
-export function requirements(agent, kind, { audit, treatments }) {
+export function requirements(agent, kind, { audit, treatments, gates = DEFAULT_GATES }) {
   const items = [];
   const inScope = agent.mapping.policies.filter(p => !p.excluded);
   const gaps = inScope.filter(p => p.state !== "active");
-  const high = agent.risks.filter(r => r.residual.score >= 10);
+  const high = agent.risks.filter(r => r.residual.score >= gates.activationRisk);
   const untreated = high.filter(r => !TREATED.includes(treatments[r.id]?.treatment));
   const violations = agentViolations(agent, audit);
 
@@ -48,7 +48,7 @@ export function requirements(agent, kind, { audit, treatments }) {
     met: gaps.length === 0, subs: gaps,
   });
   items.push({
-    id: "risks", label: "No untreated high or critical risk",
+    id: "risks", label: gates.activationRisk >= 16 ? "No untreated critical risk" : "No untreated high or critical risk",
     detail: "Reduce each high or critical residual risk with controls, or formally accept, transfer or avoid it in the risk register.",
     met: untreated.length === 0, subs: untreated,
   });
@@ -95,6 +95,9 @@ export function lifecycle(agent, ctx) {
 // Short label for the registry table
 export function nextStep(agent, ctx) {
   if (agent.status === "active") {
+    const op = operatingState(agent, ctx);
+    if (op.state === "conflict") return `Gate conflict: ${op.blockers.map(b => b.id === "risk" ? "critical risk" : b.id === "score" ? "score" : "open violation").join(", ")}`;
+    if (op.state === "exception") return `Exception until ${agent.exception.until}`;
     if (agent.conditions) {
       const r = requirements(agent, "activation", ctx);
       const open = agent.conditions.items.filter(id => !r.items.find(i => i.id === id)?.met).length;

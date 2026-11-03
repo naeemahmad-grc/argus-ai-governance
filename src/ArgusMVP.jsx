@@ -5,7 +5,7 @@ import {
   ScanSearch, Cpu, HeartPulse, ShieldAlert, CheckCircle2, Download,
   X, Filter, Plus, Info, AlertOctagon, AlertCircle, Sun, Moon,
   RotateCcw, MessageCircle, ExternalLink, Menu, Layers, Link2, ChevronRight, Lightbulb, Upload, BadgeCheck, Clock,
-  ClipboardCheck, Printer, Network, ListOrdered, Boxes, ArrowRight, UserCheck, FileSpreadsheet, Grid3x3
+  ClipboardCheck, Printer, Network, ListOrdered, Boxes, ArrowRight, UserCheck, FileSpreadsheet, Grid3x3, Inbox
 } from "lucide-react";
 import * as d3 from "d3";
 import {
@@ -14,16 +14,20 @@ import {
 } from "./frameworks.js";
 import { TRAITS, mapAgent } from "./agentMapping.js";
 import {
-  RISK_CATEGORIES, LIKELIHOOD, IMPACT, RISK_BANDS, GAP_STATUS, AGENT_SCORE_METHOD, GAP_SCORE_METHOD,
-  riskLevel, scoreAgent, buildRegister, gapAssessment,
+  RISK_CATEGORIES, LIKELIHOOD, IMPACT, RISK_BANDS, GAP_STATUS, AGENT_SCORE_METHOD,
+  riskLevel, scoreAgent, buildRegister, isResolved,
 } from "./riskLibrary.js";
 import { LANES, COMPONENT_TYPES, AGBOM_SECTION, buildArchitecture, toAgBOM } from "./architecture.js";
 import { lifecycle, requirements, nextStep, CONDITION_MAX_DAYS, PROBATION_DAYS } from "./lifecycle.js";
+import { seedAt, seedDate, localISO, addDaysISO, fmtWhen, fmtWhenLong, fmtDate, age, daysUntil } from "./timeline.js";
+import { DEFAULT_GATES, GATE_RISK_OPTIONS, GATE_SCORE_OPTIONS, EXCEPTION_MAX_DAYS, STATE_LABEL, operatingState, worstScenario, isTreated } from "./gates.js";
+import { buildAssessment, COVERAGE_METHOD, FULFILLMENT_METHOD, EXCLUSION_METHOD, SCOPE_DISCLAIMER } from "./assessment.js";
+import { decisionQueue, DECISION_KINDS } from "./decisions.js";
 
 /* ---------------- seed data ---------------- */
 
 const tr = (...ids) => Object.fromEntries(ids.map(id => [id, true]));
-const SEED_AGENTS = [
+const SEED_AGENTS_RAW = [
   { id: 1, name: "Aria CX Bot", model: "gpt-4o", dept: "Customer Success", status: "active", autonomy: "Supervised", owner: "CX Ops",
     desc: "Answers customer support questions in chat for customers in the US and EU, looks up order and account status, and hands off to a human agent when it can't resolve an issue.",
     traits: tr("customerFacing", "personalData", "euScope", "tools", "retrieval", "persistentMemory"), exclusions: {} },
@@ -60,11 +64,11 @@ const SEED_AGENTS = [
 // TODO: replace with your real form link (Tally / Google Form) before deploying
 const FEEDBACK_URL = "https://tally.so/r/YOUR-FORM-ID";
 
-const SEED_POLICIES = [
+const SEED_POLICIES_RAW = [
   { id: "p1", tag: "Data Privacy", name: "Block PII Export to External APIs", desc: "Prevents any AI agent from sending personally identifiable information to external third-party APIs without explicit authorization.", action: "BLOCK", violations: 7, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11", doc: { name: "AI-POL-001 PII Export Policy v2.pdf", uploadedOn: "2026-02-11", seeded: true } },
   { id: "p2", tag: "External Communication", name: "Require Approval for Outbound Emails", desc: "All agent-initiated outbound emails to external domains must receive human approval before sending.", action: "REQUIRE APPROVAL", violations: 3, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11", doc: { name: "AI-POL-002 Outbound Communications Approval.pdf", uploadedOn: "2026-02-11", seeded: true } },
   { id: "p3", tag: "HIPAA", name: "Restrict HIPAA Record Access", desc: "Agents without explicit HIPAA clearance are blocked from accessing health-related records.", action: "BLOCK", violations: 12, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-01-20", doc: { name: "AI-POL-003 HIPAA Access Standard.pdf", uploadedOn: "2026-01-20", seeded: true } },
-  { id: "p4", tag: "GDPR", name: "Audit Financial Data Reads", desc: "Log all agent access to financial systems for SOX compliance.", action: "AUDIT", violations: 0, enabled: true, frameworks: [], owner: "Chief Compliance Officer", status: "approved", approvedBy: "Head of Internal Audit", approvedOn: "2026-01-20", doc: { name: "AI-POL-004 Financial Data Access Logging.pdf", uploadedOn: "2026-01-20", seeded: true } },
+  { id: "p4", tag: "GDPR", name: "Audit Financial Data Reads", desc: "Log all agent access to financial systems for SOX compliance.", action: "AUDIT", violations: 0, enabled: true, frameworks: [], owner: "Chief Compliance Officer", status: "approved", approvedBy: "Head of Internal Audit", approvedOn: "2025-04-10", doc: { name: "AI-POL-004 Financial Data Access Logging.pdf", uploadedOn: "2025-04-10", seeded: true } },
   { id: "p5", tag: "Access Control", name: "Limit Full-Autonomy Agent Actions", desc: "Agents with full autonomy level require supervisor approval for any write operations.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-03-04", doc: { name: "AI-POL-005 Autonomy Levels and Write Approval.pdf", uploadedOn: "2026-03-04", seeded: true } },
   { id: "p6", tag: "Access Control", name: "Block Admin Privilege Escalation", desc: "Prevents agents from acquiring admin permissions they were not originally granted.", action: "BLOCK", violations: 2, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "Chief Risk Officer", approvedOn: "2026-01-20", doc: { name: "AI-POL-006 Privileged Access for Agents.pdf", uploadedOn: "2026-01-20", seeded: true } },
   { id: "p7", tag: "GDPR", name: "GDPR Data Deletion Compliance", desc: "Ensures agents processing EU customer data respect deletion requests within 72 hours.", action: "AUDIT", violations: 0, enabled: false, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-03-04", doc: { name: "AI-POL-007 GDPR Deletion Procedure.pdf", uploadedOn: "2026-03-04", seeded: true } },
@@ -73,31 +77,35 @@ const SEED_POLICIES = [
   { id: "p10", tag: "AI Security", name: "Least-Privilege Tool Scope", desc: "Each agent may only call tools on its approved allowlist. Calls outside that scope are held for human approval.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06", doc: { name: "AI-SEC-010 Agent Tool Allowlist Standard.pdf", uploadedOn: "2026-05-06", seeded: true } },
   { id: "p11", tag: "AI Security", name: "Block System Prompt and Secret Leakage", desc: "Filters agent responses for system prompt contents, credentials and other secrets before they leave the platform.", action: "BLOCK", violations: 1, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
   { id: "p12", tag: "Incident Response", name: "Auto-Suspend Rogue Agents", desc: "Suspends an agent automatically after 3 critical violations within 6 hours and pages its owner. Reinstatement requires review.", action: "BLOCK", violations: 1, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06", doc: { name: "AI-IR-012 Agent Containment Runbook.pdf", uploadedOn: "2026-05-06", seeded: true } },
-  { id: "p13", tag: "Third-Party Risk", name: "Vet Third-Party Models and Tools", desc: "New model providers, plugins and MCP tools must pass a security and provenance review before any agent can use them.", action: "REQUIRE APPROVAL", violations: 0, enabled: true, frameworks: [], owner: "Chief Risk Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-06-10", doc: { name: "AI-TPR-013 Third-Party Model and Tool Review.pdf", uploadedOn: "2026-06-10", seeded: true } },
+  { id: "p13", tag: "Third-Party Risk", name: "Vet Third-Party Models and Tools", desc: "New model providers, plugins and MCP tools must pass a security and provenance review before any agent can use them.", action: "REQUIRE APPROVAL", violations: 0, enabled: true, frameworks: [], owner: "Chief Risk Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-12", doc: { name: "AI-TPR-013 Third-Party Model and Tool Review.pdf", uploadedOn: "2026-05-12", seeded: true } },
 ];
 
-const SEED_AUDIT = [
-  { sev: "info", ts: "11/2/2026, 3:10:00 PM", type: "Agent Registered", agent: "ClaimsGuide", desc: "ClaimsGuide registered and pending security review before activation" },
-  { sev: "info", ts: "11/2/2026, 3:05:00 PM", type: "Agent Registered", agent: "JobFit", desc: "JobFit registered and pending security review before activation" },
+const SEED_AUDIT_RAW = [
+  { sev: "info", ts: "5/23/2026, 3:10:00 PM", type: "Agent Registered", agent: "ClaimsGuide", desc: "ClaimsGuide registered and pending security review before activation" },
+  { sev: "info", ts: "5/23/2026, 3:05:00 PM", type: "Agent Registered", agent: "JobFit", desc: "JobFit registered and pending security review before activation" },
   { id: "v1", sev: "critical", ts: "5/21/2026, 11:42:25 AM", type: "Policy Violation", agent: "ThreatWatch AI", policy: "p8", desc: "ThreatWatch AI exceeded external API rate limit — 1,247 calls in 60 minutes" },
   { sev: "critical", ts: "5/21/2026, 10:53:25 AM", type: "Agent Suspended", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha suspended automatically by Auto-Suspend Rogue Agents after 3 critical policy violations within 6 hours" },
   { id: "v2", sev: "critical", ts: "5/21/2026, 10:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p1", desc: "FinanceBot Alpha accessed 3,400 EU customer PII records without GDPR deletion check" },
   { id: "v3", sev: "critical", ts: "5/21/2026, 8:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p2", desc: "FinanceBot Alpha sent outbound emails to external vendors without approval" },
   { id: "v4", sev: "critical", ts: "5/21/2026, 5:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p3", desc: "FinanceBot Alpha attempted to access HIPAA-tagged records without clearance" },
-  { sev: "warn", ts: "5/20/2026, 11:52:25 AM", type: "Risk Change", agent: "DataSync Pro", desc: "DataSync Pro risk score updated from 35 to 42 after new financial data permissions added" },
+  { sev: "warn", ts: "5/20/2026, 11:52:25 AM", type: "Risk Change", agent: "DataSync Pro", scoreFrom: 35, scoreTo: 42, desc: "DataSync Pro risk score updated from 35 to 42 after new financial data permissions added" },
   { sev: "info", ts: "5/19/2026, 11:52:25 AM", type: "Agent Registered", agent: "LegalScan Bot", desc: "LegalScan Bot registered and pending security review before activation" },
-  { sev: "warn", ts: "5/18/2026, 11:52:25 AM", type: "Risk Change", agent: "ThreatWatch AI", desc: "ThreatWatch AI risk level elevated to HIGH after external API access pattern detected" },
+  { sev: "warn", ts: "5/18/2026, 11:52:25 AM", type: "Risk Change", agent: "ThreatWatch AI", levelTo: "HIGH", desc: "ThreatWatch AI risk level elevated to HIGH after external API access pattern detected" },
   { sev: "info", ts: "5/16/2026, 11:52:25 AM", type: "Status Change", agent: "CodeReview AI", desc: "CodeReview AI status changed from pending to active after security clearance" },
   { sev: "info", ts: "4/21/2026, 11:52:25 AM", type: "Agent Registered", agent: "Aria CX Bot", desc: "Aria CX Bot registered and activated for customer success department" },
 ];
 
-const ALERTS = [
-  { sev: "critical", title: "ThreatWatch AI exceeded external API rate limit — 1,247 calls in 60 minutes", agent: "ThreatWatch AI", time: "11:42:25 AM" },
-  { sev: "critical", title: "FinanceBot Alpha accessed 3,400 EU customer PII records without GDPR deletion check", agent: "FinanceBot Alpha", time: "10:52:25 AM" },
-  { sev: "critical", title: "FinanceBot Alpha sent outbound emails to external vendors without approval", agent: "FinanceBot Alpha", time: "8:52:25 AM" },
-  { sev: "critical", title: "FinanceBot Alpha attempted to access HIPAA-tagged records without clearance", agent: "FinanceBot Alpha", time: "5:52:25 AM" },
-  { sev: "warn", title: "DataSync Pro risk score updated from 35 to 42 after new financial data permissions added", agent: "DataSync Pro", time: "11:52:25 AM" },
-];
+
+// Seeded history is shifted so it always sits just before today (see timeline.js)
+const SEED_AUDIT = SEED_AUDIT_RAW.map(e => { const at = seedAt(e.ts); return { ...e, at, ts: fmtWhenLong(at) }; });
+const SEED_POLICIES = SEED_POLICIES_RAW.map(p => ({
+  ...p,
+  ...(p.approvedOn ? { approvedOn: seedDate(p.approvedOn) } : {}),
+  ...(p.doc?.uploadedOn ? { doc: { ...p.doc, uploadedOn: seedDate(p.doc.uploadedOn) } } : {}),
+}));
+const SEED_AGENTS = SEED_AGENTS_RAW.map(a => a.suspension
+  ? { ...a, suspension: { ...a.suspension, at: seedAt(a.suspension.on), on: fmtWhen(seedAt(a.suspension.on)) } }
+  : a);
 
 /* ---------------- themes ---------------- */
 
@@ -392,7 +400,7 @@ function RegisterAgentModal({ onClose, onRegister, policies }) {
 /* ---------------- create policy modal ---------------- */
 
 const MAX_DOC_MB = 10;
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => localISO();
 const fmtSize = b => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
 
 // Read an uploaded file into an in-memory link. Nothing leaves the browser.
@@ -631,13 +639,343 @@ function ApprovePolicyModal({ policy, onClose, onApprove }) {
   );
 }
 
+/* ---------------- assessment metrics, operating gates, alerts, decisions ---------------- */
+
+const lvlName = l => l[0] + l.slice(1).toLowerCase();
+const STATE_STYLE = (T, state) => state === "conflict" ? T.risk.HIGH : state === "exception" ? T.risk.MEDIUM : (T.status[state] || T.status.pending);
+
+function StatePill({ agent, ctx }) {
+  const T = useT();
+  const { state } = operatingState(agent, ctx);
+  const s = STATE_STYLE(T, state);
+  const extra = state === "active" ? (agent.conditions ? " · conditional" : agent.probation ? " · probation" : "") : "";
+  return <Pill fg={s.fg} bg={s.bg} border={s.border}>{state === "conflict" ? "⚠ " : ""}{STATE_LABEL[state]}{extra}</Pill>;
+}
+
+// The worst individual scenario, shown next to the aggregate score so averaging can't hide it
+function WorstRisk({ agent, treatments, prefix = "Worst" }) {
+  const T = useT();
+  const { worst, worstUntreated } = worstScenario(agent, treatments);
+  if (!worst) return null;
+  const r = worstUntreated || worst;
+  const lv = riskLevel(r.residual.score), st = T.risk[lv];
+  return (
+    <span title={`${r.id} ${r.title || ""}: residual ${r.residual.score}${worstUntreated ? ", untreated" : ", treated"}`} style={{ fontSize: 11.5, color: T.dim, whiteSpace: "nowrap" }}>
+      {prefix}: <b style={{ color: st.fg }}>{r.id} · {r.residual.score} {lvlName(lv)}</b>{worstUntreated ? "" : " (treated)"}
+    </span>
+  );
+}
+
+function MethodNote({ a, style }) {
+  const T = useT();
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ fontSize: 12, color: T.faint, lineHeight: 1.55, ...style }}>
+      Assessed {fmtWhen(a.asOf)} · {a.applicable} applicable requirements{a.na ? `, ${a.na} excluded as not applicable` : ", none excluded"} · a curated subset of each framework, not a legal compliance determination.{" "}
+      <button aria-expanded={open} onClick={() => setOpen(o => !o)} style={{ background: "none", border: "none", color: T.blue, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+        {open ? "Hide method" : "How these are calculated"}
+      </button>
+      {open && (
+        <div style={{ marginTop: 8, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 13px", color: T.dim, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div><b style={{ color: T.text }}>Mapped control coverage: </b>{COVERAGE_METHOD}</div>
+          <div><b style={{ color: T.text }}>Requirement fulfillment: </b>{FULFILLMENT_METHOD}</div>
+          <div><b style={{ color: T.text }}>Exclusions: </b>{EXCLUSION_METHOD}
+            {a.exclusions.length > 0 && <> Currently excluded: {a.exclusions.slice(0, 6).map(r => `${r.framework.short} ${r.id} (${r.basis.replace(/^Marked not applicable: /, "")})`).join("; ")}{a.exclusions.length > 6 ? `; and ${a.exclusions.length - 6} more` : ""}.</>}
+          </div>
+          <div><b style={{ color: T.text }}>Scope: </b>{SCOPE_DISCLAIMER}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// the two headline measures, as tiles
+const assessmentTiles = (T, a) => [
+  {
+    label: "Mapped control coverage", value: `${a.coveragePct ?? 0}%`, color: coverageColor(T, a.coveragePct ?? 0),
+    sub: `${a.mapped} of ${a.applicable} applicable requirements have a live control mapped · ${a.unmapped} unmapped`,
+  },
+  {
+    label: "Requirement fulfillment", value: `${a.fulfillmentPct ?? 0}%`, color: coverageColor(T, a.fulfillmentPct ?? 0),
+    sub: `${a.met} met · ${a.partial} partially met · ${a.notMet} not met, out of ${a.applicable} (evidence-weighted)`,
+  },
+];
+
+function RecentAlerts({ audit, agents, openAgent }) {
+  const T = useT();
+  const byName = Object.fromEntries(agents.map(a => [a.name, a]));
+  const events = [...audit].filter(e => e.sev === "critical" || e.sev === "warn").sort((x, y) => y.at - x.at).slice(0, 6);
+  const green = T.isDark ? "#34d399" : "#059669", red = T.isDark ? "#f43f5e" : "#e11d48";
+  const stateOf = e => {
+    const a = byName[e.agent];
+    if (!a) return null;
+    if (e.type === "Policy Violation" && e.id) return isResolved(a, e) ? { label: "Resolved", color: green } : { label: a.status === "suspended" ? "Open · agent suspended" : "Open", color: red };
+    if (e.type === "Agent Suspended") return a.status === "suspended" ? { label: "Still suspended", color: red } : { label: "Since reinstated", color: green };
+    if (e.scoreTo !== undefined) return { label: `Historical value ${e.scoreTo} · current score ${a.score}`, color: T.dim };
+    if (e.levelTo) return { label: `Historical level ${e.levelTo} · current ${a.risk}`, color: T.dim };
+    return null;
+  };
+  return (
+    <>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+        {events.length === 0 && <div style={{ color: T.faint, fontSize: 13, padding: "16px 0" }}>No critical or warning events.</div>}
+        {events.map((e, i) => {
+          const st = stateOf(e);
+          return (
+            <button key={i} onClick={() => openAgent(e.agent)} style={{
+              background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, textAlign: "left", color: T.text, font: "inherit",
+              padding: "12px 14px", display: "flex", gap: 10, cursor: "pointer", width: "100%",
+            }}>
+              <div style={{ marginTop: 3 }}><SevDot sev={e.sev} size={13} /></div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.4 }}>{e.desc}</div>
+                <div style={{ color: T.faint, fontSize: 12, marginTop: 4, lineHeight: 1.45 }}>
+                  {e.agent} · <time dateTime={new Date(e.at).toISOString()}>{fmtWhen(e.at)}</time> · {age(e.at)}
+                </div>
+                {st && <div style={{ fontSize: 11.5, fontWeight: 700, color: st.color, marginTop: 4 }}>{st.label}</div>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11.5, color: T.faint, marginTop: 12, lineHeight: 1.45 }}>
+        Runtime telemetry: not connected. These are synthetic demo events, dated relative to today.
+      </div>
+    </>
+  );
+}
+
+function DecisionForm({ agent, kind, blockers, life, onCancel }) {
+  const T = useT();
+  const [by, setBy] = useState("");
+  const [reason, setReason] = useState("");
+  const [until, setUntil] = useState(addDays(30));
+  const maxUntil = addDays(EXCEPTION_MAX_DAYS);
+  const byOk = by && by !== agent.owner;
+  const ok = byOk && reason.trim() && (kind === "suspend" || (until && until <= maxUntil && until > localISO()));
+  const id = `${kind}-${agent.id}`;
+  return (
+    <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 9 }}>
+      <div style={{ fontSize: 13, fontWeight: 700 }}>{kind === "exception" ? "Approve a time-limited exception" : "Suspend this agent"}</div>
+      <div>
+        <label htmlFor={`${id}-by`} style={labelStyle(T)}>Decided by (not the owner, {agent.owner})</label>
+        <select id={`${id}-by`} value={by} onChange={e => setBy(e.target.value)} style={fieldStyle(T)}>
+          <option value="">Select role…</option>
+          {POLICY_ROLES.map(r => <option key={r}>{r}</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor={`${id}-why`} style={labelStyle(T)}>{kind === "exception" ? "Why this risk can be carried for now (required)" : "Reason for suspension (required)"}</label>
+        <input id={`${id}-why`} value={reason} onChange={e => setReason(e.target.value)} style={fieldStyle(T)} />
+      </div>
+      {kind === "exception" && (
+        <div>
+          <label htmlFor={`${id}-until`} style={labelStyle(T)}>Exception ends (max {EXCEPTION_MAX_DAYS} days)</label>
+          <input id={`${id}-until`} type="date" value={until} max={maxUntil} onChange={e => setUntil(e.target.value)} style={fieldStyle(T)} />
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button disabled={!ok} onClick={() => kind === "exception"
+          ? life.grantException(agent.id, { by, reason: reason.trim(), until, gates: blockers.map(b => b.id) })
+          : life.suspend(agent.id, { by, reason: reason.trim() })} style={btnStyle(T, true, !!ok)}>
+          {kind === "exception" ? "Approve exception" : "Suspend agent"}
+        </button>
+        <button onClick={onCancel} style={btnStyle(T, false)}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+// Overview card for an active agent that fails a continued-operation gate, or runs under an exception
+function GateCard({ agent, policies, audit, actions, life, ctx }) {
+  const T = useT();
+  const [form, setForm] = useState(null);
+  const op = operatingState(agent, ctx);
+  if (op.state !== "conflict" && op.state !== "exception") return null;
+  const tone = op.state === "conflict" ? T.risk.HIGH : T.risk.MEDIUM;
+  const rowFor = b => {
+    if (b.id === "risk") return <RequirementSubs item={{ id: "risks", subs: b.subs }} agent={agent} policies={policies} audit={audit} actions={actions} life={life} />;
+    if (b.id === "violation") {
+      const pols = [...new Set(b.subs.map(e => e.policy))].map(id => ({ id, retest: agent.retests?.[id] || null }));
+      return <>
+        <RequirementSubs item={{ id: "rootcause", subs: b.subs.map(e => ({ ...e, resolution: agent.resolutions?.[e.id] || null })) }} agent={agent} policies={policies} audit={audit} actions={actions} life={life} />
+        <RequirementSubs item={{ id: "retest", subs: pols }} agent={agent} policies={policies} audit={audit} actions={actions} life={life} />
+      </>;
+    }
+    return null;
+  };
+  return (
+    <div id="gate-card" style={{ border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 10, padding: 14, marginBottom: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <AlertTriangle size={17} color={tone.fg} />
+        <div style={{ fontSize: 15.5, fontWeight: 800, color: tone.fg }}>{op.state === "conflict" ? "Gate conflict" : "Operating under an exception"}</div>
+      </div>
+      {op.state === "conflict" ? (
+        <div style={{ fontSize: 13, lineHeight: 1.55, marginTop: 6 }}>
+          {agent.name} is active but fails its continued-operation gate. ARGUS flags this for a decision rather than switching the agent off: fix the blockers, approve a time-limited exception, or suspend it.
+          {op.expired && <> The exception approved by {agent.exception.by} ended on <b>{agent.exception.until}</b>.</>}
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, lineHeight: 1.55, marginTop: 6 }}>
+          Approved by <b>{agent.exception.by}</b> on {agent.exception.on} until <b>{agent.exception.until}</b>: {agent.exception.reason}. The blockers below still need fixing before then.
+        </div>
+      )}
+      <div style={{ marginTop: 8 }}>
+        {op.blockers.map(b => (
+          <div key={b.id} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${T.border}` }}>
+            <AlertCircle size={16} color={tone.fg} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700 }}>{b.label}</div>
+              <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.45, marginTop: 2 }}>{b.detail}</div>
+              {b.subs && <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 8 }}>{rowFor(b)}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {op.state === "conflict" ? <>
+          <button onClick={() => setForm("exception")} aria-pressed={form === "exception"} style={btnStyle(T, false)}>Approve exception…</button>
+          <button onClick={() => setForm("suspend")} aria-pressed={form === "suspend"} style={btnStyle(T, false)}>Suspend agent…</button>
+        </> : <button onClick={() => life.revokeException(agent.id)} style={btnStyle(T, false)}>Revoke exception</button>}
+      </div>
+      {form && op.state === "conflict" && <DecisionForm key={form} agent={agent} kind={form} blockers={op.blockers} life={life} onCancel={() => setForm(null)} />}
+    </div>
+  );
+}
+
+function GatesSettings({ gates, onChange }) {
+  const T = useT();
+  const sel = { ...fieldStyle(T), width: "auto", padding: "7px 9px", fontSize: 13 };
+  const row = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "9px 0", borderTop: `1px solid ${T.border}` };
+  return (
+    <Card style={{ padding: T.mobile ? 14 : 18 }}>
+      <div style={{ fontSize: 15, fontWeight: 700 }}>Operating gates</div>
+      <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.5, margin: "3px 0 8px" }}>
+        Checked against each agent's worst individual scenario, not just its aggregate score. Failing agents are flagged, never switched off automatically. Changes are logged. Evaluated in the browser for this demo, not enforced at runtime.
+      </div>
+      <div style={row}>
+        <label htmlFor="gate-act" style={{ fontSize: 13 }}>Activation and reinstatement: block on untreated risk at</label>
+        <select id="gate-act" value={gates.activationRisk} onChange={e => onChange({ activationRisk: Number(e.target.value) })} style={sel}>
+          {GATE_RISK_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div style={row}>
+        <label htmlFor="gate-op" style={{ fontSize: 13 }}>Continued operation: flag untreated risk at</label>
+        <select id="gate-op" value={gates.operateRisk} onChange={e => onChange({ operateRisk: Number(e.target.value) })} style={sel}>
+          {GATE_RISK_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+      <div style={row}>
+        <label htmlFor="gate-score" style={{ fontSize: 13 }}>Continued operation: flag agent score at or above</label>
+        <select id="gate-score" value={gates.operateScore} onChange={e => onChange({ operateScore: Number(e.target.value) })} style={sel}>
+          {GATE_SCORE_OPTIONS.map(v => <option key={v} value={v}>{v} ({v >= 80 ? "Critical" : "High"})</option>)}
+        </select>
+      </div>
+      <div style={row}>
+        <label htmlFor="gate-viol" style={{ fontSize: 13 }}>Continued operation: flag open critical violations</label>
+        <input id="gate-viol" type="checkbox" checked={gates.operateViolations} onChange={e => onChange({ operateViolations: e.target.checked })} style={{ width: 18, height: 18 }} />
+      </div>
+    </Card>
+  );
+}
+
+const SEV_LABEL = { critical: "Critical", high: "High", medium: "Medium", low: "Low" };
+function SevBadge({ sev }) {
+  const T = useT();
+  const st = T.risk[sev.toUpperCase()] || T.risk.LOW;
+  return <Pill small fg={st.fg} bg={st.bg} border={st.border}>{sev === "critical" ? "▲ " : sev === "high" ? "▲ " : ""}{SEV_LABEL[sev]}</Pill>;
+}
+
+function Decisions({ items, gates, onGates, onAction }) {
+  const T = useT();
+  const [kind, setKind] = useState("all");
+  const [sev, setSev] = useState("all");
+  const inKind = (i, v = kind) => v === "all" || i.kind === v;
+  const inSev = (i, v = sev) => v === "all" || i.sev === v;
+  const shown = items.filter(i => inKind(i) && inSev(i));
+  const dueText = due => {
+    if (!due) return "—";
+    const d = daysUntil(due);
+    return `${fmtDate(due)} · ${d < 0 ? `${-d} day${d === -1 ? "" : "s"} overdue` : d === 0 ? "today" : `in ${d} day${d === 1 ? "" : "s"}`}`;
+  };
+  const meta = (k, v, warn) => (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 11, color: T.faint, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>{k}</div>
+      <div style={{ fontSize: 13, marginTop: 2, color: warn ? (T.isDark ? "#f43f5e" : "#e11d48") : T.text, fontWeight: warn ? 700 : 400 }}>{v}</div>
+    </div>
+  );
+  return (
+    <div>
+      <PageHeader title="Needs my decision" subtitle="Everything waiting on a governance decision, ranked by severity, agents affected, how overdue it is and how long it has been open." />
+      <div style={{ ...chipRow(T.mobile), marginTop: 18 }}>
+        {[{ id: "all", label: "All" }, ...DECISION_KINDS].map(k => (
+          <FilterChip key={k.id} active={kind === k.id} onClick={() => setKind(k.id)} label={k.label} count={items.filter(i => inKind(i, k.id) && inSev(i)).length} />
+        ))}
+      </div>
+      <div style={{ ...chipRow(T.mobile), marginTop: 8 }}>
+        {["all", "critical", "high", "medium"].map(s => (
+          <FilterChip key={s} active={sev === s} onClick={() => setSev(s)} label={s === "all" ? "Any severity" : SEV_LABEL[s]} count={items.filter(i => inKind(i) && inSev(i, s)).length} />
+        ))}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }} role="list" aria-label="Decision queue">
+        {items.length === 0 && <Card style={{ padding: 28, textAlign: "center", color: T.faint }}>Nothing needs a decision right now.</Card>}
+        {items.length > 0 && shown.length === 0 && (
+          <Card style={{ padding: 28, textAlign: "center", color: T.faint }}>
+            No items match these filters. <button onClick={() => { setKind("all"); setSev("all"); }} style={{ background: "none", border: "none", color: T.blue, fontWeight: 600, cursor: "pointer", padding: 0, fontSize: 14 }}>Clear filters</button>
+          </Card>
+        )}
+        {shown.map(i => (
+          <Card key={i.id} style={{ padding: T.mobile ? 14 : 16 }}>
+            <div role="listitem">
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <SevBadge sev={i.sev} />
+                    <Pill small fg={T.dim} bg={T.panelSoft} border={T.border}>{DECISION_KINDS.find(k => k.id === i.kind).label}</Pill>
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginTop: 7, lineHeight: 1.35 }}>{i.title}</div>
+                  <div style={{ fontSize: 13, color: T.dim, marginTop: 4, lineHeight: 1.5 }}>{i.reason}</div>
+                </div>
+                <button onClick={() => onAction(i.action)} style={{ ...btnStyle(T, true, true), whiteSpace: "nowrap" }}>{i.action.label} <ChevronRight size={14} /></button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${T.mobile ? 130 : 150}px, 1fr))`, gap: 10, marginTop: 12 }}>
+                {meta(i.agents.length > 1 ? "Agents" : "Agent", i.agents.length ? i.agents.join(", ") : "Program-wide")}
+                {meta("Owner", i.owner)}
+                {meta("Age", i.since ? `${age(i.since)} (${fmtDate(localISO(i.since))})` : "Not recorded")}
+                {meta("Due", dueText(i.due), i.due && daysUntil(i.due) < 0)}
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14, marginTop: 20 }}>
+        <GatesSettings gates={gates} onChange={onGates} />
+        <Card style={{ padding: T.mobile ? 14 : 18 }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Telemetry and integrations</div>
+          <div style={{ fontSize: 13, color: T.dim, lineHeight: 1.55, marginTop: 6 }}>
+            No runtime integrations are connected in this demo, so there is no live telemetry to go stale and no connector to fail. Agent activity, violations and alerts are synthetic. Once an integration is connected, stale feeds and disconnected connectors would be queued here.
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- views ---------------- */
 
-function Dashboard({ agents, coverage, openAgent, onOpenFrameworks }) {
+function Dashboard({ agents, assessment, audit, treatments, gates, decisions, openAgent, onOpenFrameworks, onOpenDecisions }) {
   const T = useT();
+  const ctx = { audit, treatments, gates };
   const active = agents.filter(a => a.status === "active").length;
   const suspended = agents.filter(a => a.status === "suspended").length;
-  const critical = agents.filter(a => a.risk === "CRITICAL").length;
+  const conflicts = agents.filter(a => operatingState(a, ctx).state === "conflict").length;
+  // critical exposure counted per scenario, regardless of each agent's aggregate score
+  const critPairs = agents.flatMap(a => a.risks.filter(r => r.residual.score >= 16 && !isTreated(r.id, treatments)).map(r => ({ a, r })));
+  const critScenarios = new Set(critPairs.map(p => p.r.id)).size;
+  const critAgents = new Set(critPairs.map(p => p.a.name)).size;
+  const urgent = decisions.filter(d => d.sev === "critical").length;
 
   const dist = ["LOW", "MEDIUM", "HIGH", "CRITICAL"].map(k => ({
     level: k[0] + k.slice(1).toLowerCase(),
@@ -648,11 +986,13 @@ function Dashboard({ agents, coverage, openAgent, onOpenFrameworks }) {
   const red = T.isDark ? "#f43f5e" : "#e11d48";
   const amber = T.isDark ? "#f59e0b" : "#b45309";
 
+  const [cov, ful] = assessmentTiles(T, assessment);
   const kpis = [
-    { label: "Active Agents", value: `${active} / ${agents.length}`, sub: `${suspended} suspended`, icon: <Cpu size={18} color={T.blue} />, color: T.text },
-    { label: "Compliance Score", value: `${coverage.pct}%`, sub: `${coverage.covered} of ${coverage.total} framework requirements covered`, icon: <HeartPulse size={18} color={green} />, color: green },
-    { label: "Critical Risk", value: critical, sub: "Agents requiring immediate review", icon: <ShieldAlert size={18} color={red} />, color: red },
-    { label: "Control Gaps", value: coverage.gaps, sub: `Across ${coverage.frameworks.length} frameworks`, icon: <AlertTriangle size={18} color={amber} />, color: amber },
+    { label: "Active Agents", value: `${active} / ${agents.length}`, sub: `${suspended} suspended · ${conflicts} with a gate conflict`, icon: <Cpu size={18} color={T.blue} />, color: T.text },
+    { label: "Needs my decision", value: decisions.length, sub: `${urgent} critical · open the queue`, icon: <Inbox size={18} color={urgent ? red : T.blue} />, color: urgent ? red : T.text, onClick: onOpenDecisions },
+    { label: "Untreated critical risks", value: critScenarios, sub: `Scenarios at residual 16+ across ${critAgents} agent${critAgents === 1 ? "" : "s"}, whatever their aggregate score`, icon: <ShieldAlert size={18} color={red} />, color: critScenarios ? red : green },
+    { ...cov, icon: <Layers size={18} color={cov.color} /> },
+    { ...ful, icon: <HeartPulse size={18} color={ful.color} /> },
   ];
 
   const pad = T.mobile ? 16 : 22;
@@ -661,7 +1001,7 @@ function Dashboard({ agents, coverage, openAgent, onOpenFrameworks }) {
     <div style={{ display: "flex", flexDirection: "column", gap: T.mobile ? 14 : 20 }}>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${T.mobile ? 150 : 210}px, 1fr))`, gap: T.mobile ? 10 : 16 }}>
         {kpis.map(k => (
-          <Card key={k.label} style={{ padding: T.mobile ? 14 : 20 }}>
+          <Card key={k.label} onClick={k.onClick} style={{ padding: T.mobile ? 14 : 20, cursor: k.onClick ? "pointer" : "default" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: T.mobile ? 8 : 14, gap: 6 }}>
               <span style={{ color: T.dim, fontSize: T.mobile ? 12.5 : 14 }}>{k.label}</span>{k.icon}
             </div>
@@ -670,6 +1010,7 @@ function Dashboard({ agents, coverage, openAgent, onOpenFrameworks }) {
           </Card>
         ))}
       </div>
+      <MethodNote a={assessment} style={{ marginTop: T.mobile ? -6 : -10 }} />
 
       <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "minmax(0,1fr)" : "minmax(0,1.4fr) minmax(0,1fr)", gap: T.mobile ? 14 : 20 }}>
         <Card style={{ padding: pad }}>
@@ -692,37 +1033,24 @@ function Dashboard({ agents, coverage, openAgent, onOpenFrameworks }) {
 
         <Card style={{ padding: pad, display: "flex", flexDirection: "column" }}>
           <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Recent Alerts</div>
-          <div style={{ color: T.dim, fontSize: 13, marginBottom: 14 }}>Latest high-priority events requiring attention.</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
-            {ALERTS.map((a, i) => (
-              <div key={i} onClick={() => openAgent(a.agent)} style={{
-                background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10,
-                padding: "12px 14px", display: "flex", gap: 10, cursor: "pointer",
-              }}>
-                <div style={{ marginTop: 3 }}><SevDot sev={a.sev} size={13} /></div>
-                <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.4 }}>{a.title}</div>
-                  <div style={{ color: T.faint, fontSize: 12, marginTop: 4 }}>{a.agent} &nbsp;•&nbsp; {a.time}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <div style={{ color: T.dim, fontSize: 13, marginBottom: 14 }}>Latest critical and warning events, with their current state.</div>
+          <RecentAlerts audit={audit} agents={agents} openAgent={openAgent} />
         </Card>
       </div>
 
       <Card style={{ padding: pad }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Framework Coverage</div>
-            <div style={{ color: T.dim, fontSize: 13 }}>Share of mapped requirements with an active control.</div>
+            <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Mapped control coverage by framework</div>
+            <div style={{ color: T.dim, fontSize: 13 }}>Applicable requirements with a live control mapped. Evidence-weighted fulfillment is shown alongside.</div>
           </div>
           <button onClick={onOpenFrameworks} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: T.blue, fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0 }}>
             View all frameworks <ChevronRight size={15} />
           </button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${T.mobile ? 220 : 250}px, 1fr))`, gap: "12px 24px" }}>
-          {coverage.frameworks.filter(f => f.group !== "baseline").map(f => (
-            <CoverageBar key={f.id} label={f.short} covered={f.covered} total={f.total} pct={f.pct} />
+          {assessment.frameworks.filter(f => f.group !== "baseline").map(f => (
+            <CoverageBar key={f.id} label={f.short} covered={f.mapped} total={f.applicable} pct={f.coveragePct} fulfillment={f.fulfillmentPct} />
           ))}
         </div>
       </Card>
@@ -733,14 +1061,25 @@ function Dashboard({ agents, coverage, openAgent, onOpenFrameworks }) {
 const coverageColor = (T, pct) =>
   pct >= 80 ? (T.isDark ? "#34d399" : "#059669") : pct >= 60 ? (T.isDark ? "#f59e0b" : "#b45309") : (T.isDark ? "#f43f5e" : "#e11d48");
 
-function CoverageBar({ label, covered, total, pct }) {
+function CoverageBar({ label, covered, total, pct, fulfillment }) {
   const T = useT();
+  if (pct === null || pct === undefined) return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6, gap: 8 }}>
+        <span style={{ fontWeight: 600 }}>{label}</span><span style={{ color: T.faint }}>Not in scope</span>
+      </div>
+      <div style={{ height: 7, borderRadius: 99, background: T.panelSoft, border: `1px solid ${T.border}` }} />
+    </div>
+  );
   const c = coverageColor(T, pct);
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6, gap: 8 }}>
         <span style={{ fontWeight: 600 }}>{label}</span>
-        <span style={{ color: T.dim, whiteSpace: "nowrap" }}>{covered}/{total} · <span style={{ color: c, fontWeight: 700 }}>{pct}%</span></span>
+        <span style={{ color: T.dim, whiteSpace: "nowrap" }} title={fulfillment !== undefined ? "Mapped control coverage, then evidence-weighted fulfillment" : undefined}>
+          {covered}/{total} · <span style={{ color: c, fontWeight: 700 }}>{pct}%</span>
+          {fulfillment !== undefined && fulfillment !== null && <> · <span style={{ color: T.faint }}>fulfilled</span> <span style={{ color: coverageColor(T, fulfillment), fontWeight: 700 }}>{fulfillment}%</span></>}
+        </span>
       </div>
       <div style={{ height: 7, borderRadius: 99, background: T.panelSoft, border: `1px solid ${T.border}`, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: c, borderRadius: 99, transition: "width .3s" }} />
@@ -790,8 +1129,9 @@ function ControlsBadge({ m }) {
   );
 }
 
-function Registry({ agents, policies, audit, treatments, openAgent, onOpenRegister }) {
-  const stepFor = a => nextStep(a, { audit, treatments });
+function Registry({ agents, policies, audit, treatments, gates, openAgent, onOpenRegister }) {
+  const ctx = { audit, treatments, gates };
+  const stepFor = a => nextStep(a, ctx);
   const T = useT();
   const [q, setQ] = useState("");
   const [risk, setRisk] = useState("all");
@@ -803,13 +1143,13 @@ function Registry({ agents, policies, audit, treatments, openAgent, onOpenRegist
     .join(" ").toLowerCase().includes(q.toLowerCase());
   const matchFw = r => fw === "all" || r.m.inScopeFrameworks.some(x => x.id === fw);
   const matchRisk = (r, v = risk) => v === "all" || r.a.risk === v;
-  const matchStatus = (r, v = status) => v === "all" || r.a.status === v;
+  const matchStatus = (r, v = status) => v === "all" || (v === "conflict" ? operatingState(r.a, ctx).state === "conflict" : r.a.status === v);
   const base = rows.filter(r => matchQ(r) && matchFw(r));
   const shown = base.filter(r => matchRisk(r) && matchStatus(r));
   const filtered = q || risk !== "all" || status !== "all" || fw !== "all";
 
   const riskChips = [["all", "All risk levels"], ["CRITICAL", "Critical"], ["HIGH", "High"], ["MEDIUM", "Medium"], ["LOW", "Low"]];
-  const statusChips = [["all", "Any status"], ["active", "Active"], ["pending", "Pending review"], ["suspended", "Suspended"]];
+  const statusChips = [["all", "Any status"], ["active", "Active"], ["conflict", "Gate conflict"], ["pending", "Pending review"], ["suspended", "Suspended"]];
 
   return (
     <div>
@@ -875,10 +1215,13 @@ function Registry({ agents, policies, audit, treatments, openAgent, onOpenRegist
                 </div>
                 {a.desc && <div style={{ color: T.dim, fontSize: 13, lineHeight: 1.45, marginTop: 8, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{a.desc}</div>}
                 <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <Pill fg={s.fg} bg={s.bg} border={s.border}>{a.status}</Pill>
-                  {stepFor(a) && <span style={{ fontSize: 11.5, color: T.faint }}>{stepFor(a)}</span>}
-                  <Pill fg={r.fg} bg={r.bg} border={r.border}>{a.risk}</Pill>
+                  <StatePill agent={a} ctx={ctx} />
+                  <Pill fg={r.fg} bg={r.bg} border={r.border}>{a.score} {a.risk}</Pill>
                   <span style={{ marginLeft: "auto" }}><ControlsBadge m={m} /></span>
+                </div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+                  <WorstRisk agent={a} treatments={treatments} />
+                  {stepFor(a) && <span style={{ fontSize: 11.5, color: T.faint }}>{stepFor(a)}</span>}
                 </div>
               </Card>
             );
@@ -890,8 +1233,8 @@ function Registry({ agents, policies, audit, treatments, openAgent, onOpenRegist
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
               <thead>
                 <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 13, textAlign: "left" }}>
-                  {["Agent", "Department", "Status", "Risk Level", "Frameworks", "Controls in place", ""].map((h, i) => (
-                    <th key={i} style={{ padding: "13px 16px", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
+                  {["Agent", "Department", "Status", "Agent score", "Frameworks", "Controls in place", ""].map((h, i) => (
+                    <th key={i} scope="col" style={{ padding: "13px 16px", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -907,14 +1250,15 @@ function Registry({ agents, policies, audit, treatments, openAgent, onOpenRegist
                       </td>
                       <td style={{ padding: "14px 16px", fontSize: 14 }}>{a.dept}</td>
                       <td style={{ padding: "14px 16px" }}>
-                        <Pill fg={s.fg} bg={s.bg} border={s.border}>{a.status}</Pill>
-                        {stepFor(a) && <div style={{ fontSize: 11.5, color: a.status === "suspended" ? (T.isDark ? "#f43f5e" : "#e11d48") : T.faint, marginTop: 5, whiteSpace: "nowrap" }}>{stepFor(a)}</div>}
+                        <StatePill agent={a} ctx={ctx} />
+                        {stepFor(a) && <div style={{ fontSize: 11.5, color: a.status === "suspended" || operatingState(a, ctx).state === "conflict" ? (T.isDark ? "#f43f5e" : "#e11d48") : T.faint, marginTop: 5, whiteSpace: "nowrap" }}>{stepFor(a)}</div>}
                       </td>
                       <td style={{ padding: "14px 16px" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           {a.risk === "CRITICAL" && <ShieldAlert size={14} color={r.fg} />}
-                          <Pill fg={r.fg} bg={r.bg} border={r.border}>{a.risk}</Pill>
+                          <Pill fg={r.fg} bg={r.bg} border={r.border}>{a.score} {a.risk}</Pill>
                         </span>
+                        <div style={{ marginTop: 5 }}><WorstRisk agent={a} treatments={treatments} /></div>
                       </td>
                       <td style={{ padding: "14px 16px", fontSize: 13.5 }} title={m.inScopeFrameworks.map(f => f.short).join(", ")}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -1156,16 +1500,16 @@ function AuditTrail({ audit }) {
 
 /* ---------------- frameworks ---------------- */
 
-function Frameworks({ coverage, gapKeys, policies, onOpen, onAdopt }) {
+function Frameworks({ assessment, gapKeys, policies, onOpen, onAdopt }) {
   const T = useT();
   const [group, setGroup] = useState("all");
-  const list = coverage.frameworks.filter(f => group === "all" || f.group === group);
+  const frameworks = assessment.frameworks;
+  const list = frameworks.filter(f => group === "all" || f.group === group);
 
   const summary = [
-    { label: "Overall coverage", value: `${coverage.pct}%`, color: coverageColor(T, coverage.pct) },
-    { label: "Frameworks tracked", value: coverage.frameworks.length, color: T.text },
-    { label: "Requirements mapped", value: coverage.total, color: T.text },
-    { label: "Open gaps", value: coverage.gaps, color: T.isDark ? "#f59e0b" : "#b45309" },
+    ...assessmentTiles(T, assessment),
+    { label: "Frameworks tracked", value: frameworks.length, color: T.text, sub: `${assessment.total} curated requirements, ${assessment.na} excluded` },
+    { label: "Unmapped requirements", value: assessment.unmapped, color: T.isDark ? "#f59e0b" : "#b45309", sub: "Applicable requirements with no live control" },
   ];
 
   return (
@@ -1177,23 +1521,25 @@ function Frameworks({ coverage, gapKeys, policies, onOpen, onAdopt }) {
           <Card key={s.label} style={{ padding: T.mobile ? "12px 14px" : "16px 18px" }}>
             <div style={{ color: T.dim, fontSize: 12.5 }}>{s.label}</div>
             <div style={{ fontSize: T.mobile ? 22 : 26, fontWeight: 800, color: s.color, marginTop: 4 }}>{s.value}</div>
+            {s.sub && <div style={{ color: T.faint, fontSize: 12, marginTop: 4, lineHeight: 1.4 }}>{s.sub}</div>}
           </Card>
         ))}
       </div>
+      <MethodNote a={assessment} style={{ marginTop: 10 }} />
 
-      <RecommendationPlan gapKeys={gapKeys} policies={policies} onAdopt={onAdopt} totalGaps={coverage.gaps} />
+      <RecommendationPlan gapKeys={gapKeys} policies={policies} onAdopt={onAdopt} totalGaps={assessment.unmapped} />
 
       <div style={{ display: "flex", gap: 8, flexWrap: T.mobile ? "nowrap" : "wrap", overflowX: "auto", margin: "20px 0 16px", paddingBottom: 2 }}>
         {[{ id: "all", label: "All" }, ...FRAMEWORK_GROUPS].map(g => (
           <FilterChip key={g.id} active={group === g.id} onClick={() => setGroup(g.id)} label={g.label}
-            count={coverage.frameworks.filter(f => g.id === "all" || f.group === g.id).length} />
+            count={frameworks.filter(f => g.id === "all" || f.group === g.id).length} />
         ))}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(290px, 100%), 1fr))", gap: T.mobile ? 12 : 16 }}>
         {list.map(f => {
-          const gaps = f.total - f.covered;
-          const level = Math.max(1, Math.min(5, 1 + Math.round((f.pct / 100) * 4)));
+          const gaps = f.unmapped;
+          const level = Math.max(1, Math.min(5, 1 + Math.round(((f.coveragePct ?? 0) / 100) * 4)));
           return (
             <Card key={f.id} onClick={() => onOpen(f.id)} style={{ padding: 18, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
@@ -1205,9 +1551,10 @@ function Frameworks({ coverage, gapKeys, policies, onOpen, onAdopt }) {
                 <div style={{ color: T.faint, fontSize: 12.5, marginTop: 3, lineHeight: 1.4 }}>{f.source}</div>
               </div>
               <div style={{ marginTop: "auto" }}>
-                <CoverageBar label={f.maturity ? `Indicative level ${level} of 5` : "Coverage"} covered={f.covered} total={f.total} pct={f.pct} />
+                <CoverageBar label={f.maturity ? `Indicative level ${level} of 5` : "Mapped coverage"} covered={f.mapped} total={f.applicable} pct={f.coveragePct} fulfillment={f.fulfillmentPct} />
                 <div style={{ color: gaps ? (T.isDark ? "#f59e0b" : "#b45309") : T.faint, fontSize: 12.5, marginTop: 8 }}>
-                  {gaps ? `${gaps} open gap${gaps > 1 ? "s" : ""}` : "No open gaps"}
+                  {f.applicable === 0 ? "No agent in scope" : gaps ? `${gaps} unmapped requirement${gaps > 1 ? "s" : ""}` : "Every applicable requirement mapped"}
+                  {f.na > 0 && f.applicable > 0 && <span style={{ color: T.faint }}> · {f.na} excluded</span>}
                 </div>
               </div>
             </Card>
@@ -1216,7 +1563,7 @@ function Frameworks({ coverage, gapKeys, policies, onOpen, onAdopt }) {
       </div>
 
       <div style={{ color: T.faint, fontSize: 12, marginTop: 18, lineHeight: 1.5 }}>
-        Each framework shows a curated set of requirements relevant to governing AI agents, not the full text. Coverage counts a requirement once any enabled policy or always-on platform capability maps to it.
+        {SCOPE_DISCLAIMER} {COVERAGE_METHOD}
       </div>
     </div>
   );
@@ -1342,7 +1689,8 @@ function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogg
   const byId = Object.fromEntries(policies.map(p => [p.id, p]));
   const green = T.isDark ? "#34d399" : "#059669";
   const amber = T.isDark ? "#f59e0b" : "#b45309";
-  const level = Math.max(1, Math.min(5, 1 + Math.round((f.pct / 100) * 4)));
+  const level = Math.max(1, Math.min(5, 1 + Math.round(((f.coveragePct ?? 0) / 100) * 4)));
+  const GS = GAP_STYLE(T);
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: T.overlay, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
@@ -1359,7 +1707,10 @@ function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogg
         </div>
 
         <div style={{ margin: "18px 0" }}>
-          <CoverageBar label={f.maturity ? `Indicative level ${level} of 5` : "Coverage"} covered={f.covered} total={f.total} pct={f.pct} />
+          <CoverageBar label={f.maturity ? `Indicative level ${level} of 5` : "Mapped control coverage"} covered={f.mapped} total={f.applicable} pct={f.coveragePct} fulfillment={f.fulfillmentPct} />
+          <div style={{ fontSize: 12, color: T.faint, marginTop: 6, lineHeight: 1.5 }}>
+            {f.met} met · {f.partial} partially met · {f.notMet} not met{f.na ? ` · ${f.na} not applicable` : ""}. Curated subset of the framework, not a compliance determination.
+          </div>
         </div>
 
         {f.note && (
@@ -1371,19 +1722,24 @@ function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogg
 
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Requirements</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {f.reqs.map(req => {
+          {f.rows.map(req => {
+            const na = req.status === "Not applicable";
             const linkedPolicies = req.refs.filter(x => !x.startsWith("cap:")).map(x => byId[x]).filter(Boolean);
             const caps = req.refs.filter(x => x.startsWith("cap:")).map(x => CAPABILITIES[x.slice(4)]);
+            const gapOpen = !req.covered && !na;
             const disabledOnly = !req.covered && linkedPolicies.length > 0;
             const linkable = policies.filter(p => !req.refs.includes(p.id));
             return (
-              <div key={req.key} style={{ background: T.panelSoft, border: `1px solid ${req.covered ? T.border : (T.isDark ? "rgba(245,158,11,.35)" : "rgba(180,83,9,.3)")}`, borderRadius: 10, padding: "12px 14px" }}>
+              <div key={req.key} style={{ background: T.panelSoft, border: `1px solid ${!gapOpen ? T.border : (T.isDark ? "rgba(245,158,11,.35)" : "rgba(180,83,9,.3)")}`, borderRadius: 10, padding: "12px 14px", opacity: na ? .75 : 1 }}>
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  {req.covered
+                  {!gapOpen
                     ? <CheckCircle2 size={16} color={green} style={{ flexShrink: 0, marginTop: 2 }} />
                     : <AlertCircle size={16} color={amber} style={{ flexShrink: 0, marginTop: 2 }} />}
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.blue, fontFamily: "ui-monospace, monospace" }}>{req.id}</div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: T.blue, fontFamily: "ui-monospace, monospace" }}>{req.id}</span>
+                      <Pill small fg={GS[req.status].fg} bg={GS[req.status].bg} border={GS[req.status].border}>{req.status}</Pill>
+                    </div>
                     <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4, marginTop: 2 }}>{req.title}</div>
 
                     {(caps.length > 0 || linkedPolicies.length > 0) && (
@@ -1397,7 +1753,8 @@ function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogg
                       </div>
                     )}
 
-                    {!req.covered && (
+                    {na && <div style={{ fontSize: 12.5, color: T.faint, marginTop: 8, lineHeight: 1.45 }}>Excluded: {req.basis.replace(/^Marked not applicable: /, "")}</div>}
+                    {gapOpen && (
                       <div style={{ fontSize: 12.5, color: amber, marginTop: 8, lineHeight: 1.45 }}>
                         {!disabledOnly ? "Gap: no control mapped yet."
                           : linkedPolicies.some(p => p.status === "draft") ? "Gap: the mapped policy is awaiting approval."
@@ -1405,12 +1762,12 @@ function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink, onTogg
                       </div>
                     )}
 
-                    {!req.covered && !disabledOnly && recommendationFor(req.key) && (
+                    {gapOpen && !disabledOnly && recommendationFor(req.key) && (
                       <RecommendedControl tpl={recommendationFor(req.key)} reqKey={req.key} gapKeys={gapKeys}
                         policies={policies} onAdopt={onAdopt} />
                     )}
 
-                    {!req.covered && (
+                    {gapOpen && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                         {disabledOnly && linkedPolicies.filter(p => p.status === "draft").map(p => (
                           <button key={`a-${p.id}`} onClick={() => onApprove(p.id)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: T.blue, color: "#fff", border: "none" }}>
@@ -1768,7 +2125,7 @@ const downloadFile = (name, content, type) => {
   a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
-const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const addDays = n => addDaysISO(n);
 
 const SegTabs = ({ tabs, value, onChange }) => {
   const T = useT();
@@ -2485,11 +2842,11 @@ function ApprovalPanel({ agent, req, life }) {
   );
 }
 
-function LifecycleCard({ agent, policies, audit, treatments, actions, life, onShowTab }) {
+function LifecycleCard({ agent, policies, audit, treatments, gates, actions, life, onShowTab }) {
   const T = useT();
   const red = T.isDark ? "#f43f5e" : "#e11d48";
   const green = T.isDark ? "#34d399" : "#059669";
-  const ctx = { audit, treatments };
+  const ctx = { audit, treatments, gates };
 
   if (agent.status === "active") {
     if (!agent.conditions && !agent.probation) return null;
@@ -2660,7 +3017,7 @@ function DrawerSection({ title, sub, children }) {
   );
 }
 
-function AgentDrawer({ agent, audit, policies, actions, treatments, life, onClose, onUpdateTraits, onExclude, onInclude }) {
+function AgentDrawer({ agent, audit, policies, actions, treatments, gates, life, onClose, onUpdateTraits, onExclude, onInclude }) {
   const T = useT();
   const [editing, setEditing] = useState(false);
   const [draftTraits, setDraftTraits] = useState({});
@@ -2711,13 +3068,14 @@ function AgentDrawer({ agent, audit, policies, actions, treatments, life, onClos
         <div style={{ color: T.faint, fontSize: 13.5, marginBottom: 14 }}>{agent.model}</div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-          <button onClick={() => { setView("overview"); setTimeout(() => document.getElementById("lifecycle-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
-            title="Show status and next steps" aria-label={`Status ${agent.status}. Show next steps`}
+          <button onClick={() => { setView("overview"); setTimeout(() => (document.getElementById("gate-card") || document.getElementById("lifecycle-card"))?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
+            title="Show status and next steps" aria-label={`Status ${STATE_LABEL[operatingState(agent, { audit, treatments, gates }).state]}. Show next steps`}
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
-            <Pill fg={s.fg} bg={s.bg} border={s.border}>{agent.status}{agent.conditions ? " · conditional" : ""}{agent.probation ? " · probation" : ""}</Pill>
+            <StatePill agent={agent} ctx={{ audit, treatments, gates }} />
           </button>
-          <Pill fg={r.fg} bg={r.bg} border={r.border}>{agent.risk}</Pill>
-          {nextStep(agent, { audit, treatments }) && <span style={{ fontSize: 12, color: T.faint, alignSelf: "center" }}>{nextStep(agent, { audit, treatments })}</span>}
+          <Pill fg={r.fg} bg={r.bg} border={r.border}>{agent.score} {agent.risk}</Pill>
+          <span style={{ alignSelf: "center" }}><WorstRisk agent={agent} treatments={treatments} prefix="Worst scenario" /></span>
+          {nextStep(agent, { audit, treatments, gates }) && <span style={{ fontSize: 12, color: T.faint, alignSelf: "center", flexBasis: "100%" }}>{nextStep(agent, { audit, treatments, gates })}</span>}
         </div>
 
         <div style={{ marginBottom: 18 }}>
@@ -2726,7 +3084,8 @@ function AgentDrawer({ agent, audit, policies, actions, treatments, life, onClos
         {view === "architecture" && <ArchitectureTab agent={agent} policies={policies} audit={audit} actions={actions} />}
         {view === "risk" && <AgentRiskTab agent={agent} policies={policies} audit={audit} actions={actions} />}
         {view === "overview" && (<>
-        <LifecycleCard agent={agent} policies={policies} audit={audit} treatments={treatments} actions={actions} life={life} onShowTab={setView} />
+        <GateCard agent={agent} policies={policies} audit={audit} actions={actions} life={life} ctx={{ audit, treatments, gates }} />
+        <LifecycleCard agent={agent} policies={policies} audit={audit} treatments={treatments} gates={gates} actions={actions} life={life} onShowTab={setView} />
         {agent.desc && <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>{agent.desc}</div>}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
@@ -2848,7 +3207,7 @@ function RiskScenarioDrawer({ entry, treatment, policies, audit, actions, onSave
   const valid = f.owner && f.reviewOn && (f.treatment !== "Accept" || (f.accReason.trim() && f.accBy && !sameOwner)) && (!["Transfer", "Avoid"].includes(f.treatment) || f.note.trim());
   const save = () => onSave(entry.id, {
     treatment: f.treatment, owner: f.owner, reviewOn: f.reviewOn, note: f.note.trim(),
-    acceptance: f.treatment === "Accept" ? { by: f.accBy, reason: f.accReason.trim(), on: new Date().toISOString().slice(0, 10) } : null,
+    acceptance: f.treatment === "Accept" ? { by: f.accBy, reason: f.accReason.trim(), on: localISO() } : null,
   });
 
   return (
@@ -3104,7 +3463,8 @@ const gapNextStep = (row, policies) => {
   return null;
 };
 
-function GapAssessment({ gap, policies, actions, onGapField, onMarkNA }) {
+function GapAssessment({ assessment, policies, actions, onGapField, onMarkNA }) {
+  const gap = assessment.frameworks;
   const T = useT();
   const [fw, setFw] = useState("all");
   const [status, setStatus] = useState("all");
@@ -3115,8 +3475,6 @@ function GapAssessment({ gap, policies, actions, onGapField, onMarkNA }) {
   const inSt = (r, v = status) => v === "all" || r.status === v;
   const shown = rows.filter(r => inFw(r) && inSt(r));
   const totals = st => rows.filter(r => r.status === st).length;
-  const applicable = rows.length - totals("Not applicable");
-  const overall = applicable ? Math.round(((totals("Met") + totals("Partially met") * 0.5) / applicable) * 100) : 0;
   const GS = GAP_STYLE(T);
 
   const exportCsv = () => downloadFile("argus-gap-assessment.csv", toCSV([
@@ -3162,10 +3520,12 @@ function GapAssessment({ gap, policies, actions, onGapField, onMarkNA }) {
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${T.mobile ? 140 : 160}px, 1fr))`, gap: T.mobile ? 10 : 14 }}>
-        <Card style={{ padding: T.mobile ? "12px 14px" : "16px 18px" }}>
-          <div style={{ color: T.dim, fontSize: 12.5 }}>Gap score</div>
-          <div style={{ fontSize: T.mobile ? 22 : 26, fontWeight: 800, color: coverageColor(T, overall), marginTop: 4 }}>{overall}%</div>
-        </Card>
+        {assessmentTiles(T, assessment).map(k => (
+          <Card key={k.label} style={{ padding: T.mobile ? "12px 14px" : "16px 18px" }}>
+            <div style={{ color: T.dim, fontSize: 12.5 }}>{k.label}</div>
+            <div style={{ fontSize: T.mobile ? 22 : 26, fontWeight: 800, color: k.color, marginTop: 4 }}>{k.value}</div>
+          </Card>
+        ))}
         {GAP_STATUS.map(st => (
           <Card key={st} onClick={() => setStatus(status === st ? "all" : st)} style={{ padding: T.mobile ? "12px 14px" : "16px 18px", cursor: "pointer", borderColor: status === st ? GS[st].fg : T.border }}>
             <div style={{ color: T.dim, fontSize: 12.5 }}>{st}</div>
@@ -3173,14 +3533,14 @@ function GapAssessment({ gap, policies, actions, onGapField, onMarkNA }) {
           </Card>
         ))}
       </div>
-      <div style={{ fontSize: 12, color: T.faint, marginTop: 8, lineHeight: 1.5 }}>{GAP_SCORE_METHOD}</div>
+      <MethodNote a={assessment} style={{ marginTop: 8 }} />
 
       <Card style={{ marginTop: 16, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: T.mobile ? 520 : 0 }}>
             <thead>
               <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 12.5, textAlign: "left" }}>
-                {["Framework", "Met", "Partial", "Not met", "N/A", "Gap score"].map(h => <th key={h} style={{ padding: "10px 12px", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>)}
+                {["Framework", "Met", "Partial", "Not met", "N/A", "Mapped", "Fulfillment"].map(h => <th key={h} scope="col" style={{ padding: "10px 12px", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -3191,6 +3551,7 @@ function GapAssessment({ gap, policies, actions, onGapField, onMarkNA }) {
                   <td style={{ padding: "9px 12px", fontSize: 13.5, color: GS["Partially met"].fg }}>{f.partial}</td>
                   <td style={{ padding: "9px 12px", fontSize: 13.5, color: GS["Not met"].fg }}>{f.notMet}</td>
                   <td style={{ padding: "9px 12px", fontSize: 13.5, color: T.faint }}>{f.na}</td>
+                  <td style={{ padding: "9px 12px", fontSize: 13, whiteSpace: "nowrap" }}>{f.coveragePct === null ? "—" : `${f.mapped}/${f.applicable} · ${f.coveragePct}%`}</td>
                   <td style={{ padding: "9px 12px", minWidth: 130 }}>
                     {f.score === null ? <span style={{ fontSize: 12.5, color: T.faint }}>Not in scope</span> : (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
@@ -3250,13 +3611,13 @@ function GapAssessment({ gap, policies, actions, onGapField, onMarkNA }) {
   );
 }
 
-function ReportBody({ scored, register, gap, treatments, policies, today }) {
+function ReportBody({ scored, register, assessment, treatments, policies, today }) {
   const T = useT();
   const tr = s => treatments[s.id] || defaultTreatment(s);
-  const rows = gap.flatMap(f => f.rows);
+  const gap = assessment.frameworks;
+  const rows = assessment.rows;
   const count = st => rows.filter(r => r.status === st).length;
-  const applicable = rows.length - count("Not applicable");
-  const overall = applicable ? Math.round(((count("Met") + count("Partially met") * 0.5) / applicable) * 100) : 0;
+  const applicable = assessment.applicable;
   const lvls = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
   const top = [...register].sort((a, b) => b.residual.score - a.residual.score).slice(0, 8);
   const accepted = register.filter(s => tr(s).treatment === "Accept");
@@ -3272,7 +3633,7 @@ function ReportBody({ scored, register, gap, treatments, policies, today }) {
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: T.blue }}>ARGUS</div>
           <h1 style={{ fontSize: 22, fontWeight: 800, margin: "4px 0 2px" }}>AI Risk and Gap Assessment</h1>
-          <div style={{ color: T.dim }}>Point-in-time report · {today}</div>
+          <div style={{ color: T.dim }}>Point-in-time report · assessed {fmtWhen(assessment.asOf)}</div>
         </div>
         <PanoptesMark size={40} color={T.text} />
       </div>
@@ -3282,7 +3643,7 @@ function ReportBody({ scored, register, gap, treatments, policies, today }) {
 
       <H2>Summary</H2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-        {[["Gap score", `${overall}%`], ["Requirements not met", count("Not met")], ["High or critical residual risks", register.filter(s => s.residual.score >= 10).length], ["Agents rated high or critical", scored.filter(a => a.risk === "HIGH" || a.risk === "CRITICAL").length]].map(([l, v]) => (
+        {[["Requirement fulfillment", `${assessment.fulfillmentPct ?? 0}%`], ["Mapped control coverage", `${assessment.coveragePct ?? 0}% (${assessment.mapped}/${applicable})`], ["Requirements not met", count("Not met")], ["Untreated critical scenarios", register.filter(s => s.residual.score >= 16 && tr(s).treatment === "Mitigate").length]].map(([l, v]) => (
           <div key={l} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 10px" }}>
             <div style={{ fontSize: 10.5, color: T.dim }}>{l}</div>
             <div style={{ fontSize: 19, fontWeight: 800 }}>{v}</div>
@@ -3290,16 +3651,20 @@ function ReportBody({ scored, register, gap, treatments, policies, today }) {
         ))}
       </div>
       <p style={{ margin: "10px 0 0" }}>
-        Of {applicable} applicable requirements, {count("Met")} are met, {count("Partially met")} partially met and {count("Not met")} not met.
+        Of {applicable} applicable requirements ({assessment.na} excluded as not applicable), {count("Met")} are met, {count("Partially met")} partially met and {count("Not met")} not met; {assessment.mapped} have a live control mapped.
         Residual risk across {register.length} scenarios: {lvls.map(l => `${register.filter(s => riskLevel(s.residual.score) === l).length} ${lvlName(l).toLowerCase()}`).join(", ")}.
         {accepted.length ? ` ${accepted.length} risk${accepted.length > 1 ? "s have" : " has"} been formally accepted.` : " No risks have been formally accepted."}
       </p>
 
-      <H2>Gap status by framework</H2>
+      <p style={{ margin: "6px 0 0", fontSize: 11.5, color: T.dim }}>{SCOPE_DISCLAIMER}</p>
+
+      <H2>Requirement status by framework</H2>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead><tr>{["Framework", "Met", "Partial", "Not met", "N/A", "Gap score"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+        <thead><tr>{["Framework", "Met", "Partial", "Not met", "N/A", "Mapped coverage", "Fulfillment"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
         <tbody>{gap.map(f => (
-          <tr key={f.id}><td style={td}>{f.name}</td><td style={td}>{f.met}</td><td style={td}>{f.partial}</td><td style={td}>{f.notMet}</td><td style={td}>{f.na}</td><td style={{ ...td, fontWeight: 700 }}>{f.score === null ? "Not in scope" : `${f.score}%`}</td></tr>
+          <tr key={f.id}><td style={td}>{f.name}</td><td style={td}>{f.met}</td><td style={td}>{f.partial}</td><td style={td}>{f.notMet}</td><td style={td}>{f.na}</td>
+            <td style={td}>{f.coveragePct === null ? "Not in scope" : `${f.mapped}/${f.applicable} (${f.coveragePct}%)`}</td>
+            <td style={{ ...td, fontWeight: 700 }}>{f.fulfillmentPct === null ? "Not in scope" : `${f.fulfillmentPct}%`}</td></tr>
         ))}</tbody>
       </table>
 
@@ -3318,13 +3683,17 @@ function ReportBody({ scored, register, gap, treatments, policies, today }) {
 
       <H2>Agent risk scores</H2>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead><tr>{["Agent", "Status", "Score", "Level", "Highest residual risks", "Violations"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
-        <tbody>{[...scored].sort((a, b) => b.score - a.score).map(a => (
-          <tr key={a.id}>
-            <td style={td}>{a.name}</td><td style={td}>{a.status}</td><td style={{ ...td, fontWeight: 700 }}>{a.score}</td><td style={td}>{lvlName(a.risk)}</td>
-            <td style={td}>{a.scoreBreakdown.top.join(", ")}</td><td style={td}>{a.scoreBreakdown.crit} critical, {a.scoreBreakdown.warn} warning</td>
-          </tr>
-        ))}</tbody>
+        <thead><tr>{["Agent", "Status", "Score", "Level", "Worst untreated scenario", "Highest residual risks", "Open violations"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+        <tbody>{[...scored].sort((a, b) => b.score - a.score).map(a => {
+          const w = worstScenario(a, treatments).worstUntreated;
+          return (
+            <tr key={a.id}>
+              <td style={td}>{a.name}</td><td style={td}>{a.status}</td><td style={{ ...td, fontWeight: 700 }}>{a.score}</td><td style={td}>{lvlName(a.risk)}</td>
+              <td style={{ ...td, fontWeight: w && w.residual.score >= 16 ? 700 : 400 }}>{w ? `${w.id} · ${w.residual.score} ${lvlName(riskLevel(w.residual.score))}` : "None"}</td>
+              <td style={td}>{a.scoreBreakdown.top.join(", ")}</td><td style={td}>{a.scoreBreakdown.crit} critical, {a.scoreBreakdown.warn} warning</td>
+            </tr>
+          );
+        })}</tbody>
       </table>
 
       <H2>Priority remediation</H2>
@@ -3362,7 +3731,9 @@ function ReportBody({ scored, register, gap, treatments, policies, today }) {
         <li>Risk scenarios follow a {RISK_CATEGORIES.length}-category AI risk taxonomy and are mapped to OWASP, MITRE ATLAS, NIST AI RMF and applicable regulations.</li>
         <li>Each scenario is scored likelihood × impact on 5-point scales. Inherent risk is before controls; residual risk credits only controls that are enabled, approved, in scope for the agent and not violated by it; target risk assumes every mapped control is in place. Bands: {RISK_BANDS}.</li>
         <li>Agent risk score: {AGENT_SCORE_METHOD}</li>
-        <li>Requirement status: Met needs an always-on platform capability or an approved, enabled policy with evidence on file. An approved policy without evidence, or a draft, is Partially met. {GAP_SCORE_METHOD}</li>
+        <li>Requirement status: Met needs an always-on platform capability or an approved, enabled policy with evidence on file. An approved policy without evidence, or a draft, is Partially met. {FULFILLMENT_METHOD} {EXCLUSION_METHOD}</li>
+        <li>{COVERAGE_METHOD}</li>
+        <li>An agent's aggregate score averages its three highest residual risks, so the worst untreated scenario is reported separately. Operating gates flag any active agent with an untreated critical scenario regardless of its aggregate score.</li>
       </ul>
       <div style={{ marginTop: 18, paddingTop: 8, borderTop: `1px solid ${T.border}`, fontSize: 10.5, color: T.faint }}>Generated by ARGUS · {today}</div>
     </div>
@@ -3403,11 +3774,16 @@ function AssessmentReport(props) {
   );
 }
 
-function Assessments({ scored, register, gap, policies, audit, treatments, actions, onSaveTreatment, onGapField, onMarkNA, onOpenAgent, focus, onFocusDone }) {
+function Assessments({ scored, register, assessment, policies, audit, treatments, actions, onSaveTreatment, onGapField, onMarkNA, onOpenAgent, focus, onFocusDone }) {
   const T = useT();
   const [tab, setTab] = useState("risk");
   const [openId, setOpenId] = useState(null);
-  useEffect(() => { if (focus) { setTab("risk"); setOpenId(focus); onFocusDone(); } }, [focus]);
+  useEffect(() => {
+    if (!focus) return;
+    if (focus.startsWith("tab:")) setTab(focus.slice(4));
+    else { setTab("risk"); setOpenId(focus); }
+    onFocusDone();
+  }, [focus]);
   const entry = openId && register.find(s => s.id === openId);
   return (
     <div>
@@ -3416,8 +3792,8 @@ function Assessments({ scored, register, gap, policies, audit, treatments, actio
         <SegTabs value={tab} onChange={setTab} tabs={[["risk", "Risk register", <Grid3x3 size={14} key="i" />], ["gap", "Gap assessment", <ClipboardCheck size={14} key="i" />], ["report", "Report", <FileText size={14} key="i" />]]} />
       </div>
       {tab === "risk" && <RiskRegister register={register} treatments={treatments} onOpen={setOpenId} />}
-      {tab === "gap" && <GapAssessment gap={gap} policies={policies} actions={actions} onGapField={onGapField} onMarkNA={onMarkNA} />}
-      {tab === "report" && <AssessmentReport scored={scored} register={register} gap={gap} treatments={treatments} policies={policies} />}
+      {tab === "gap" && <GapAssessment assessment={assessment} policies={policies} actions={actions} onGapField={onGapField} onMarkNA={onMarkNA} />}
+      {tab === "report" && <AssessmentReport scored={scored} register={register} assessment={assessment} treatments={treatments} policies={policies} />}
       {entry && (
         <RiskScenarioDrawer key={entry.id} entry={entry} treatment={treatments[entry.id] || defaultTreatment(entry)} policies={policies} audit={audit} actions={actions}
           onSave={(id, t) => { onSaveTreatment(id, t); setOpenId(null); }} onClose={() => setOpenId(null)} onOpenAgent={name => { setOpenId(null); onOpenAgent(name); }} />
@@ -3447,18 +3823,19 @@ export default function ArgusMVP() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
 
-  const coverage = useMemo(() => computeCoverage(reqMap, policies), [reqMap, policies]);
   const [treatments, setTreatments] = useState({});
+  const [gates, setGates] = useState(DEFAULT_GATES);
   const [gapOverrides, setGapOverrides] = useState({});
   const [riskFocus, setRiskFocus] = useState(null);
   // agent risk scores, the risk register and the gap assessment are all derived from current state
   const scored = useMemo(() => agents.map(a => ({ ...a, ...scoreAgent(a, policies, audit) })), [agents, policies, audit]);
   const register = useMemo(() => buildRegister(scored), [scored]);
-  const gap = useMemo(() => gapAssessment(reqMap, policies, scored, gapOverrides), [reqMap, policies, scored, gapOverrides]);
-  const openFramework = fwOpen ? coverage.frameworks.find(f => f.id === fwOpen) : null;
-  const gapKeys = useMemo(() => new Set(
-    coverage.frameworks.flatMap(f => f.reqs.filter(q => !q.covered).map(q => q.key))
-  ), [coverage]);
+  // one assessment feeds the dashboard, frameworks, gap assessment and report
+  const assessment = useMemo(() => buildAssessment(reqMap, policies, scored, gapOverrides), [reqMap, policies, scored, gapOverrides]);
+  const openFramework = fwOpen ? assessment.frameworks.find(f => f.id === fwOpen) : null;
+  const gapKeys = assessment.gapKeys;
+  const decisions = useMemo(() => decisionQueue({ scored, register, policies, audit, treatments, gates, assessment, gapOverrides }),
+    [scored, register, policies, audit, treatments, gates, assessment, gapOverrides]);
 
   useEffect(() => { if (!mobile) setNavOpen(false); }, [mobile]);
 
@@ -3467,13 +3844,10 @@ export default function ArgusMVP() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  const nowTs = () => new Date().toLocaleString("en-US", {
-    month: "numeric", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
-  });
-
-  const log = (sev, type, agent, desc) =>
-    setAudit(ev => [{ sev, ts: nowTs(), type, agent, desc }, ...ev]);
+  const log = (sev, type, agent, desc, extra = {}) => {
+    const at = Date.now();
+    setAudit(ev => [{ sev, at, ts: fmtWhenLong(at), type, agent, desc, ...extra }, ...ev]);
+  };
 
   const resetDemo = () => {
     setAgents(SEED_AGENTS);
@@ -3482,6 +3856,7 @@ export default function ArgusMVP() {
     setReqMap(SEED_REQ_MAP);
     setTreatments({});
     setRiskFocus(null);
+    setGates(DEFAULT_GATES);
     setGapOverrides({});
     setDetailId(null);
     setFwOpen(null);
@@ -3545,7 +3920,7 @@ export default function ArgusMVP() {
   };
 
   const updateAgent = (id, patch) => setAgents(as => as.map(a => a.id === id ? { ...a, ...(typeof patch === "function" ? patch(a) : patch) } : a));
-  const today = () => new Date().toISOString().slice(0, 10);
+  const today = () => localISO();
 
   // Agent lifecycle: owner works the requirements and submits; an independent approver decides
   const life = {
@@ -3574,8 +3949,8 @@ export default function ArgusMVP() {
     },
     submit: (id, kind) => {
       const a = scored.find(x => x.id === id);
-      const r = requirements(a, kind, { audit, treatments });
-      updateAgent(id, { review: { kind, by: a.owner, on: today() } });
+      const r = requirements(a, kind, { audit, treatments, gates });
+      updateAgent(id, { review: { kind, by: a.owner, on: today(), at: Date.now() } });
       log("info", kind === "activation" ? "Submitted for Activation" : "Submitted for Reinstatement", a.name,
         `${a.owner} submitted ${a.name} for ${kind} with ${r.met} of ${r.total} requirements met`);
       notify("Submitted for approval");
@@ -3595,7 +3970,7 @@ export default function ArgusMVP() {
         return;
       }
       if (kind === "activation") {
-        const r = requirements(a, "activation", { audit, treatments });
+        const r = requirements(a, "activation", { audit, treatments, gates });
         const conditional = dec.decision === "conditional";
         updateAgent(id, {
           status: "active", review: null, lastDecision: { decision: dec.decision, by: dec.by, on: today() },
@@ -3616,6 +3991,45 @@ export default function ArgusMVP() {
       }
     },
     openRisk: sid => { setDetailId(null); setView("assessments"); setNavOpen(false); setRiskFocus(sid); },
+    grantException: (id, ex) => {
+      const a = agents.find(x => x.id === id);
+      updateAgent(id, { exception: { ...ex, on: today(), at: Date.now() } });
+      log("warn", "Gate Exception Approved", a.name, `${ex.by} approved an exception for ${a.name} until ${ex.until} covering ${ex.gates.join(", ")}: ${ex.reason}`);
+      notify(`Exception approved until ${ex.until}`);
+    },
+    revokeException: id => {
+      const a = agents.find(x => x.id === id);
+      updateAgent(id, { exception: null });
+      log("info", "Gate Exception Revoked", a.name, `Exception for ${a.name} revoked`);
+    },
+    suspend: (id, d) => {
+      const a = agents.find(x => x.id === id);
+      const at = Date.now();
+      updateAgent(id, { status: "suspended", exception: null, conditions: null, probation: null, review: null,
+        suspension: { on: fmtWhen(at), at, by: d.by, reason: d.reason, autonomy: a.autonomy } });
+      log("critical", "Agent Suspended", a.name, `${a.name} suspended by ${d.by}: ${d.reason}`);
+      notify(`${a.name} suspended`);
+    },
+    reviewPolicy: pid => {
+      const p = policies.find(x => x.id === pid);
+      setPolicies(ps => ps.map(x => x.id === pid ? { ...x, reviewedOn: today() } : x));
+      log("info", "Policy Reviewed", "—", `Annual review of "${p.name}" recorded; next review due in 12 months`);
+      notify("Policy review recorded");
+    },
+    setGates: patch => {
+      setGates(g => ({ ...g, ...patch }));
+      log("warn", "Gate Configuration Changed", "—", `Operating gates changed: ${Object.entries(patch).map(([k, v]) => `${k} = ${v}`).join(", ")}`);
+      notify("Operating gates updated");
+    },
+  };
+
+  const runDecision = act => {
+    if (act.type === "agent") { setDetailId(act.id); return; }
+    if (act.type === "risk") { life.openRisk(act.id); return; }
+    if (act.type === "gaps") { go("assessments"); setRiskFocus("tab:gap"); return; }
+    if (act.type === "enable") { togglePolicy(act.id); return; }
+    if (act.type === "approve") { setApproving(act.id); return; }
+    if (act.type === "review") life.reviewPolicy(act.id);
   };
 
   const updateTraits = (id, traits) => {
@@ -3633,7 +4047,7 @@ export default function ArgusMVP() {
     const a = agents.find(x => x.id === id);
     const m = mapAgent(a, policies);
     const item = [...m.frameworks, ...m.policies].find(x => x.key === key);
-    updateAgent(id, { exclusions: { ...(a.exclusions || {}), [key]: { reason, on: new Date().toISOString().slice(0, 10) } } });
+    updateAgent(id, { exclusions: { ...(a.exclusions || {}), [key]: { reason, on: localISO() } } });
     log("warn", "Scope Exclusion", a.name, `${item?.short || item?.name || key} excluded from ${a.name}'s scope: ${reason}`);
     notify(`Excluded ${item?.short || item?.name}`);
   };
@@ -3715,7 +4129,7 @@ export default function ArgusMVP() {
     const [fwId, i] = key.split("|");
     const fw = FRAMEWORKS.find(f => f.id === fwId);
     const label = `${fw.short} ${fw.requirements[Number(i)].id}`;
-    setGapOverrides(o => ({ ...o, [key]: { ...(o[key] || {}), na: reason ? { reason, on: new Date().toISOString().slice(0, 10) } : null } }));
+    setGapOverrides(o => ({ ...o, [key]: { ...(o[key] || {}), na: reason ? { reason, on: localISO() } : null } }));
     log(reason ? "warn" : "info", "Scope Change", "—", reason ? `${label} marked not applicable: ${reason}` : `${label} marked applicable again`);
     notify(reason ? `${label} marked not applicable` : `${label} back in scope`);
   };
@@ -3724,6 +4138,7 @@ export default function ArgusMVP() {
 
   const NAV = [
     { id: "dashboard", label: "Dashboard", icon: <Activity size={17} /> },
+    { id: "decisions", label: "Needs my decision", icon: <Inbox size={17} />, badge: decisions.filter(d => d.sev === "critical").length },
     { id: "registry", label: "Agent Registry", icon: <Users size={17} /> },
     { id: "policy", label: "Policy Engine", icon: <FileText size={17} /> },
     { id: "frameworks", label: "Frameworks", icon: <Layers size={17} /> },
@@ -3752,13 +4167,14 @@ export default function ArgusMVP() {
       <div style={{ color: T.faint, fontSize: 11.5, fontWeight: 700, letterSpacing: ".12em", padding: "0 8px", marginBottom: 10 }}>OPERATIONS</div>
       <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {NAV.map(n => (
-          <button key={n.id} onClick={() => go(n.id)} style={{
-            display: "flex", alignItems: "center", gap: 12, padding: "11px 12px",
+          <button key={n.id} onClick={() => go(n.id)} aria-current={view === n.id ? "page" : undefined} aria-label={n.badge ? `${n.label}, ${n.badge} critical` : undefined} style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", whiteSpace: "nowrap",
             borderRadius: 9, border: "none", cursor: "pointer", fontSize: 14.5, fontWeight: 500,
             background: view === n.id ? T.blue : "transparent",
             color: view === n.id ? "#fff" : T.navText, textAlign: "left", transition: "background .12s",
           }}>
-            {n.icon}{n.label}
+            {n.icon}<span style={{ flex: 1 }}>{n.label}</span>
+            {n.badge > 0 && <span aria-hidden="true" style={{ fontSize: 11.5, fontWeight: 700, minWidth: 20, textAlign: "center", padding: "1px 6px", borderRadius: 99, background: view === n.id ? "rgba(255,255,255,.25)" : (T.isDark ? "#f43f5e" : "#e11d48"), color: "#fff" }}>{n.badge}</span>}
           </button>
         ))}
       </nav>
@@ -3798,7 +4214,7 @@ export default function ArgusMVP() {
             <span style={{ flex: 1, lineHeight: 1.4 }}>
               {mobile
                 ? "Demo environment with synthetic data."
-                : "Demo environment — all agents, violations, and events are synthetic. Explore freely: register agents, toggle policies, click anything."}
+                : "Demo environment: all agents, violations and events are synthetic, and the seeded history is dated relative to today. Nothing is enforced on a server. Explore freely."}
             </span>
             <button onClick={resetDemo} style={{
               display: "flex", alignItems: "center", gap: 6, background: "transparent",
@@ -3857,13 +4273,15 @@ export default function ArgusMVP() {
           </header>
 
           <main style={{ padding: mobile ? "18px 16px 96px" : 28, minWidth: 0 }}>
-            {view === "dashboard" && <Dashboard agents={scored} coverage={coverage} openAgent={openAgent} onOpenFrameworks={() => go("frameworks")} />}
-            {view === "registry" && <Registry agents={scored} policies={policies} audit={audit} treatments={treatments} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
+            {view === "dashboard" && <Dashboard agents={scored} assessment={assessment} audit={audit} treatments={treatments} gates={gates} decisions={decisions}
+              openAgent={openAgent} onOpenFrameworks={() => go("frameworks")} onOpenDecisions={() => go("decisions")} />}
+            {view === "decisions" && <Decisions items={decisions} gates={gates} onGates={life.setGates} onAction={runDecision} />}
+            {view === "registry" && <Registry agents={scored} policies={policies} audit={audit} treatments={treatments} gates={gates} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
             {view === "policy" && <PolicyEngine policies={policies} reqMap={reqMap} toggle={togglePolicy} onOpenCreate={() => openCreatePolicy()} onApprove={setApproving} />}
-            {view === "frameworks" && <Frameworks coverage={coverage} gapKeys={gapKeys} policies={policies} onOpen={setFwOpen} onAdopt={adoptRecommendation} />}
+            {view === "frameworks" && <Frameworks assessment={assessment} gapKeys={gapKeys} policies={policies} onOpen={setFwOpen} onAdopt={adoptRecommendation} />}
             {view === "audit" && <AuditTrail audit={audit} />}
             {view === "heatmap" && <Heatmap agents={scored} openAgent={openAgent} />}
-            {view === "assessments" && <Assessments scored={scored} register={register} gap={gap} policies={policies} audit={audit} treatments={treatments}
+            {view === "assessments" && <Assessments scored={scored} register={register} assessment={assessment} policies={policies} audit={audit} treatments={treatments}
               actions={actions} onSaveTreatment={saveTreatment} onGapField={setGapField} onMarkNA={markNA} onOpenAgent={openAgent}
               focus={riskFocus} onFocusDone={() => setRiskFocus(null)} />}
           </main>
@@ -3876,7 +4294,7 @@ export default function ArgusMVP() {
           <ApprovePolicyModal policy={policies.find(p => p.id === approving)} onClose={() => setApproving(null)} onApprove={approvePolicy} />
         )}
         <AgentDrawer key={detailId ?? "none"} agent={scored.find(a => a.id === detailId)} audit={audit} policies={policies} actions={actions}
-          treatments={treatments} life={life}
+          treatments={treatments} gates={gates} life={life}
           onClose={() => setDetailId(null)} onUpdateTraits={updateTraits} onExclude={excludeMapping} onInclude={includeMapping} />
         <FrameworkDrawer framework={openFramework} policies={policies} gapKeys={gapKeys} onClose={() => setFwOpen(null)}
           onLink={linkPolicy} onTogglePolicy={togglePolicy} onAdopt={adoptRecommendation} onApprove={setApproving} />

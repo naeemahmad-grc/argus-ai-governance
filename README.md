@@ -24,6 +24,8 @@ ARGUS is an MVP exploring what enterprise governance tooling for AI agents shoul
 - **Agent lifecycle** — pending and suspended agents show a status card with a live checklist of what's blocking them and one-click fixes. The owner submits, and an independent approver activates, approves with conditions (open items due within 90 days), or returns it with a reason. A suspended agent shows when, by what and why it was suspended, and can only be reinstated once every violation is root-caused, the broken controls are re-tested, required controls are in place, high risks are treated, autonomy is reduced and the score is below critical. Reinstated agents go on 30-day probation. Every step is logged in the audit trail (`src/lifecycle.js`).
 - **Simulated identity and separation of duties** — switch between fictional users (governance lead, CRO, CISO, privacy officer, two agent owners, a read-only auditor). Each action records the person and the accountable role they acted in. Owners can't approve their own agents, drafters can't approve their drafts, risk owners can't accept their own risks, and the auditor can't change anything. Lifecycle commands are validated for role, state and concurrent changes before they apply (`src/identity.js`, `src/commands.js`).
 - **Audit Trail** — append-only ledger with event IDs, actor and role, outcome (including denied attempts), the record and version acted on, before and after values, and correlation IDs linking a submission to its decision. Filter by agent, type, actor, outcome and date; open related agents and policies; verify the checksum chain; export the filtered view to CSV with spreadsheet-formula protection. Owners see only their agents' events. Free text is screened for secrets and personal data before it is logged (`src/audit.js`).
+- **Shareable links** — every page, agent panel tab, framework, policy and risk scenario has its own URL (for example `/registry/financebot-alpha/architecture` or `/risk/register/R11`), and filters live in the query string (`/registry?status=conflict&risk=HIGH`). Refresh, Back and Forward work, and broken or inaccessible links explain themselves. Refreshing keeps your place but resets the demo data (`src/router.js`).
+- **Accessibility** — labeled form fields, named dialogs that keep focus inside, close on Escape and return focus to where you were, keyboard access to every chart, diagram and card, sortable table views for the risk charts, page landmarks with a skip link, screen-reader announcements for status messages, and colors that meet WCAG AA contrast in both themes. Checked with automated axe-core scans and keyboard-only test runs; not yet tested with a screen reader by a person.
 - **Risk Radar** — polar view where distance from center is aggregated risk, sectors are departments, and agents drifting past the critical threshold ring pulse for attention. A grid view is available for raw score scanning.
 
 The demo walks through a full governance loop: FinanceBot Alpha commits three critical policy violations in a six-hour window and is automatically suspended, with every step recorded in the audit trail.
@@ -53,7 +55,26 @@ Enterprises are deploying AI agents faster than they're building the infrastruct
 
 ## Stack
 
-React (single-component MVP) · d3 (circle packing) · lucide-react (icons) · custom SVG visualizations · full dark/light theme system
+React 18 + Vite · d3 (circle packing) · lucide-react (icons) · custom SVG visualizations · dark/light themes · no backend
+
+```
+src/
+  ArgusMVP.jsx        app shell: state, routing, actions
+  ui/                 screens and shared components (dashboard, registry, policies, frameworks, risk, audit, agent panel...)
+  router.js           URLs, history and query-string filters
+  seedData.js         synthetic demo data
+  riskLibrary.js      risk scenarios, scoring, gap assessment
+  assessment.js       coverage and fulfillment measures
+  controls.js         control effectiveness and test evidence
+  gates.js            operating gates
+  lifecycle.js        activation and reinstatement requirements
+  commands.js         lifecycle command validation
+  identity.js         simulated users, roles and separation of duties
+  decisions.js        the "Needs my decision" queue
+  audit.js            audit ledger, redaction, CSV safety
+  frameworks.js, agentMapping.js, architecture.js, timeline.js
+vercel.json           serves the app for every URL so deep links survive a refresh
+```
 
 ## Running locally
 

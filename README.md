@@ -1,6 +1,6 @@
 # ARGUS — Agentic AI Governance Platform
 
-**Live demo: [Launch ARGUS](https://claude.ai/public/artifacts/cef37607-191d-4aae-8c6b-4e58d90736a3) — runs in the browser, no install required.
+**Live demo: [argus-ai-governance.vercel.app](https://argus-ai-governance.vercel.app)** — runs in the browser, no install required.
 
 ARGUS is an MVP exploring what enterprise governance tooling for AI agents should look like: a single control plane to inventory deployed agents, enforce behavioral policies, track violations, and surface risk — before an autonomous agent becomes an incident.
 
@@ -8,7 +8,10 @@ ARGUS is an MVP exploring what enterprise governance tooling for AI agents shoul
 
 ## What it does
 
-- **Dashboard** — fleet-level KPIs (active agents, framework coverage, critical risk, control gaps), a Risk Field bubble view where bubble size scales with each agent's risk score, and a live alert feed.
+- **Dashboard** — fleet-level KPIs (active agents and gate conflicts, items needing a decision, untreated critical scenarios, mapped control coverage and requirement fulfillment), a Risk Field bubble view where bubble size scales with each agent's risk score, and an alert feed with full dates, time zone, age and each event's current state (open, resolved, historical value versus current).
+- **Two assessment measures, one engine** — *mapped control coverage* (does an enabled, approved control exist for the requirement?) and *requirement fulfillment* (is there evidence it is met? Met 1, Partially met 0.5) are reported side by side with numerators, denominators, partials, exclusions, the assessment time and the method. The Dashboard, Frameworks, gap assessment and report all read the same assessment (`src/assessment.js`). Each framework is a curated subset of requirements; the figures track control readiness and are not a legal compliance determination.
+- **Operating gates** — an agent's aggregate score averages its worst risks, so the worst individual scenario is shown beside it everywhere. Configurable gates check activation and continued operation (untreated critical risk, score, open critical violations). An active agent that fails a gate is flagged as a gate conflict, never switched off silently: someone fixes the blocker, approves a time-limited exception (independent approver, reason, at most 90 days) or suspends it (`src/gates.js`).
+- **Needs my decision** — one queue of gate conflicts, untreated critical scenarios, pending approvals, failed or switched-off controls, and overdue reviews, ranked by severity, agents affected, how overdue and how old, each with owner, age, due date, reason and a direct next action (`src/decisions.js`).
 - **Agent Registry** — directory of all deployed AI agents with a description, model, department, owner, autonomy level, status and risk, filterable by risk, status and framework scope. Each agent's characteristics (decisions about people, personal or health data, EU use, tool access, code execution and so on) drive transparent rules that map it to the frameworks and policies that apply, with the reason for each. Mappings that don't fit can be excluded with a logged justification, and missing controls can be created from a template in place. The rules live in `src/agentMapping.js`.
 - **Policy Engine** — governance rules with enforcement actions (BLOCK, REQUIRE APPROVAL, WARN, AUDIT), including AI-specific controls for prompt injection, tool scope, secret leakage, rogue-agent suspension and third-party model vetting. Each policy's framework tags come from the requirement crosswalk.
 - **Policy lifecycle** — each policy has an owner and an approver chosen from governance roles, an optional uploaded policy document, and a draft or approved status. Drafts don't count toward coverage until approved, and the approver must differ from the owner.
@@ -35,6 +38,11 @@ The demo walks through a full governance loop: FinanceBot Alpha commits three cr
 Each framework lists a curated set of requirements relevant to governing AI agents, not the full text. A requirement counts as covered when an enabled policy or an always-on platform capability maps to it. The catalog lives in `src/frameworks.js`.
 
 The app is responsive: on phones the sidebar becomes a slide-out menu, tables become cards, and the visualizations resize their labels.
+
+## What's real and what's simulated
+
+- **Real in the browser:** every score, assessment, gate, queue item and checklist is calculated live from the current state, and every governance action is written to the audit trail.
+- **Simulated:** all agents, violations, alerts and evidence are synthetic. Seeded history is dated relative to today (`src/timeline.js`). There is no backend, login or database: the signed-in user, approver roles and separation-of-duties checks are enforced only in the browser, and everything resets on refresh. Nothing is enforced at agent runtime and no telemetry integration is connected.
 
 ## Why this matters
 

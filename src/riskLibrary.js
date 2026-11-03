@@ -11,6 +11,7 @@
  * methodology can be explained line by line.
  */
 import { FRAMEWORKS, computeCoverage } from "./frameworks.js";
+import { effectiveness } from "./controls.js";
 import { mapAgent } from "./agentMapping.js";
 
 export const RISK_CATEGORIES = [
@@ -154,7 +155,9 @@ export function assessAgent(agent, policies, mapping = mapAgent(agent, policies)
   const inScope = id => polState[id] && !polState[id].excluded;
   // a control with a recorded violation by this agent is not working, so it doesn't reduce risk
   const violated = new Set(audit.filter(e => e.agent === agent.name && e.type === "Policy Violation" && e.policy && !isResolved(agent, e)).map(e => e.policy));
-  const active = id => inScope(id) && polState[id].state === "active" && !violated.has(id);
+  // credit only for controls that are approved, switched on and verified effective by a current, passing test
+  const effect = id => effectiveness(policies.find(p => p.id === id), agent.id).state;
+  const active = id => inScope(id) && polState[id].state === "active" && !violated.has(id) && effect(id) === "effective";
   const fullAuto = agent.autonomy === "Full autonomy";
 
   return RISK_SCENARIOS.filter(s => s.when(agent)).map(s => {
@@ -162,7 +165,7 @@ export function assessAgent(agent, policies, mapping = mapAgent(agent, policies)
     const L = s.l, I = Math.min(5, s.i + iBoost);
     const controls = s.controls.filter(c => inScope(c.id)).map(c => ({
       ...c, name: polState[c.id].name, state: polState[c.id].state, template: polState[c.id].template,
-      active: active(c.id), violated: violated.has(c.id),
+      active: active(c.id), violated: violated.has(c.id), effect: effect(c.id),
     }));
     const reduce = list => ({
       l: Math.max(1, L - list.reduce((n, c) => n + (c.l || 0), 0)),
@@ -186,7 +189,7 @@ export function assessAgent(agent, policies, mapping = mapAgent(agent, policies)
  *   + 15 points per critical policy violation and 5 per warning on record (max 40)
  * A control the agent has violated is treated as not working when residual risk is scored.
  */
-export const AGENT_SCORE_METHOD = "Average of the agent's three highest residual risk scores (each out of 25) scaled to 100, plus 15 points per open critical policy violation and 5 per open warning (up to 40), capped at 100. A control the agent has violated doesn't count toward reducing its risk until it is re-tested. Resolved violations stay in the history but stop counting.";
+export const AGENT_SCORE_METHOD = "Average of the agent's three highest residual risk scores (each out of 25) scaled to 100, plus 15 points per open critical policy violation and 5 per open warning (up to 40), capped at 100. A control only reduces risk once it is approved, switched on and verified effective by a current, passing test; an untested, stale or failed control gets no credit. A control the agent has violated gets no credit until it is re-tested. Resolved violations stay in the history but stop counting.";
 
 export function scoreAgent(agent, policies, audit) {
   const mapping = mapAgent(agent, policies);
@@ -228,9 +231,9 @@ export const GAP_STATUS = ["Met", "Partially met", "Not met", "Not applicable"];
 
 /*
  * Requirement status, worked out from the evidence:
- *   Met            - always-on platform capability, or an approved, enabled policy with a document on file
- *   Partially met  - approved policy without a document, or a policy still in draft
- *   Not met        - no control mapped, or the mapped policy is turned off
+ *   Met            - always-on platform capability, or an approved, enabled policy verified effective by a current passing test
+ *   Partially met  - approved and switched on but untested or with stale test evidence, or still in draft
+ *   Not met        - no control mapped, the mapped policy is turned off, or it failed its last test
  *   Not applicable - no registered agent is in scope for the framework, or marked N/A with a reason
  */
 export function gapAssessment(reqMap, policies, scoredAgents, overrides = {}) {
@@ -246,15 +249,18 @@ export function gapAssessment(reqMap, policies, scoredAgents, overrides = {}) {
       const pols = req.refs.filter(r => !r.startsWith("cap:")).map(r => byId[r]).filter(Boolean);
       const caps = req.refs.filter(r => r.startsWith("cap:"));
       const live = pols.filter(p => p.enabled && p.status !== "draft");
-      const withDoc = live.filter(p => p.doc);
+      const eff = p => effectiveness(p);
+      const proven = live.filter(p => eff(p).state === "effective");
+      const pending = live.filter(p => ["untested", "stale"].includes(eff(p).state));
+      const failed = live.filter(p => eff(p).state === "failed");
       let status, basis;
       if (!agents.length) { status = "Not applicable"; basis = "No registered agent is in scope for this framework"; }
       else if (ov.na) { status = "Not applicable"; basis = `Marked not applicable: ${ov.na.reason}`; }
-      else if (caps.length || withDoc.length) {
-        status = "Met";
-        basis = withDoc.length ? `Approved policy with evidence: ${withDoc[0].name}` : "Always-on platform capability with system-generated evidence";
-      } else if (live.length) { status = "Partially met"; basis = `${live[0].name} is approved but no evidence document is on file`; }
+      else if (proven.length) { status = "Met"; basis = `${proven[0].name}: ${eff(proven[0]).reason}`; }
+      else if (caps.length) { status = "Met"; basis = "Always-on platform capability with system-generated evidence"; }
+      else if (pending.length) { status = "Partially met"; basis = `${pending[0].name} is in place, but ${eff(pending[0]).reason.toLowerCase()}`; }
       else if (pols.some(p => p.status === "draft")) { status = "Partially met"; basis = `${pols.find(p => p.status === "draft").name} is drafted and awaiting approval`; }
+      else if (failed.length) { status = "Not met"; basis = `${failed[0].name} ${eff(failed[0]).reason.replace(/^Failed/, "failed")}`; }
       else if (pols.length) { status = "Not met"; basis = `${pols[0].name} is turned off`; }
       else { status = "Not met"; basis = "No control mapped"; }
       return { ...req, framework: f, fwInScope: agents.length > 0, status, basis, policies: pols, owner: ov.owner || "", due: ov.due || "", na: ov.na || null };

@@ -8,6 +8,7 @@
 import { isResolved } from "./riskLibrary.js";
 import { operatingState, isTreated } from "./gates.js";
 import { requirements } from "./lifecycle.js";
+import { effectiveness } from "./controls.js";
 import { addDaysISO, daysUntil, parseISODate } from "./timeline.js";
 
 export const POLICY_REVIEW_DAYS = 365;
@@ -112,6 +113,23 @@ export function decisionQueue({ scored, register, policies, audit, treatments, g
       id: `off-${p.id}`, kind: "control", sev: users.some(a => a.status === "active") ? "high" : "medium", agents: users.map(a => a.name), owner: p.owner,
       title: `${p.name} is switched off`, reason: `Required for ${users.length} agent${users.length > 1 ? "s" : ""}, so it gives no protection or credit while off.`,
       action: { label: "Enable policy", type: "enable", id: p.id },
+    });
+    const eff = effectiveness(p);
+    const n = `${users.length} agent${users.length > 1 ? "s" : ""}`;
+    if (eff.state === "failed") push({
+      id: `fail-${p.id}`, kind: "control", sev: users.some(a => a.status === "active") ? "high" : "medium", agents: users.map(a => a.name), owner: eff.test.owner || p.owner,
+      title: `${p.name} failed its last control test`, reason: `${eff.reason}. It gives no risk reduction for ${n} until it passes a re-test.`,
+      since: eff.test.at, action: { label: "Record re-test", type: "test", id: p.id },
+    });
+    if (eff.state === "stale") push({
+      id: `stale-${p.id}`, kind: "overdue", sev: "medium", agents: users.map(a => a.name), owner: eff.test.owner || p.owner,
+      title: `Test evidence for ${p.name} is stale`, reason: `${eff.reason}. It no longer counts as effective for ${n}.`,
+      due: eff.test.expiresOn, action: { label: "Record test", type: "test", id: p.id },
+    });
+    if (eff.state === "untested") push({
+      id: `untested-${p.id}`, kind: "control", sev: "medium", agents: users.map(a => a.name), owner: p.owner,
+      title: `${p.name} has no test evidence`, reason: `Approved and switched on, but never tested, so it gives no risk reduction for ${n} yet.`,
+      action: { label: "Record test", type: "test", id: p.id },
     });
     if (p.status === "draft") push({
       id: `draft-${p.id}`, kind: "approval", sev: "medium", agents: users.map(a => a.name), owner: p.owner,

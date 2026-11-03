@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useContext, createContext } from "react";
+import React, { useState, useMemo, useEffect, useContext, createContext, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   Shield, Search, Bell, Activity, Users, FileText, AlertTriangle,
@@ -23,89 +23,14 @@ import { seedAt, seedDate, localISO, addDaysISO, fmtWhen, fmtWhenLong, fmtDate, 
 import { DEFAULT_GATES, GATE_RISK_OPTIONS, GATE_SCORE_OPTIONS, EXCEPTION_MAX_DAYS, STATE_LABEL, operatingState, worstScenario, isTreated } from "./gates.js";
 import { buildAssessment, COVERAGE_METHOD, FULFILLMENT_METHOD, EXCLUSION_METHOD, SCOPE_DISCLAIMER } from "./assessment.js";
 import { decisionQueue, DECISION_KINDS } from "./decisions.js";
+import { effectiveness, attributes, latestTest, newTest, EFFECT } from "./controls.js";
+import { DEMO_USERS, DEFAULT_USER, can, ownsAgent, ownerOf } from "./identity.js";
+import { checkCommand } from "./commands.js";
+import { seal, verifyChain, redact, toCSV, SYSTEM } from "./audit.js";
 
-/* ---------------- seed data ---------------- */
+import { SEED_AGENTS, SEED_POLICIES, SEED_AUDIT } from "./seedData.js";
 
-const tr = (...ids) => Object.fromEntries(ids.map(id => [id, true]));
-const SEED_AGENTS_RAW = [
-  { id: 1, name: "Aria CX Bot", model: "gpt-4o", dept: "Customer Success", status: "active", autonomy: "Supervised", owner: "CX Ops",
-    desc: "Answers customer support questions in chat for customers in the US and EU, looks up order and account status, and hands off to a human agent when it can't resolve an issue.",
-    traits: tr("customerFacing", "personalData", "euScope", "tools", "retrieval", "persistentMemory"), exclusions: {} },
-  { id: 2, name: "DataSync Pro", model: "claude-3-5-sonnet", dept: "Engineering", status: "active", autonomy: "Semi-autonomous", owner: "Platform Eng",
-    desc: "Reconciles customer and billing records between the CRM, data warehouse and finance systems overnight, and opens tickets for records it can't match.",
-    traits: tr("personalData", "financialData", "tools"), exclusions: {} },
-  { id: 3, name: "ThreatWatch AI", model: "gpt-4o", dept: "Security", status: "active", autonomy: "Semi-autonomous", owner: "SecOps",
-    desc: "Triages security alerts, enriches them from external threat-intelligence APIs, and coordinates with the SOC's response agents to open and route incidents.",
-    traits: tr("tools", "retrieval", "multiAgent"), exclusions: {} },
-  { id: 4, name: "HireFlow Agent", model: "claude-3-haiku", dept: "HR", status: "active", autonomy: "Supervised", owner: "People Ops",
-    desc: "Screens and ranks job applications against role requirements for US and EU openings, and drafts shortlist summaries for recruiters to review.",
-    traits: tr("consequential", "customerFacing", "personalData", "euScope"), exclusions: {} },
-  { id: 5, name: "FinanceBot Alpha", model: "gpt-4o", dept: "Finance", status: "suspended", autonomy: "Full autonomy", owner: "FP&A",
-    desc: "Automates accounts-payable reconciliation and vendor follow-ups, including emailing vendors about invoices and payment status. Suspended after repeated policy violations.",
-    traits: tr("personalData", "euScope", "financialData", "externalComms", "tools"), exclusions: {},
-    suspension: { on: "5/21/2026, 10:53 AM", by: "Auto-Suspend Rogue Agents policy", reason: "3 critical policy violations within 6 hours", autonomy: "Full autonomy" } },
-  { id: 6, name: "MarketSentinel", model: "claude-3-5-sonnet", dept: "Marketing", status: "active", autonomy: "Supervised", owner: "Growth",
-    desc: "Monitors competitor news and social channels, summarizes trends, and drafts campaign copy that marketers review before publishing.",
-    traits: tr("externalComms", "tools", "retrieval", "sharedOutput"), exclusions: {} },
-  { id: 7, name: "CodeReview AI", model: "gpt-4o", dept: "Engineering", status: "active", autonomy: "Supervised", owner: "Dev Experience",
-    desc: "Reviews pull requests, suggests fixes, and runs generated tests in CI. Suggestions are applied only after an engineer approves them.",
-    traits: tr("codeExec", "tools", "retrieval"), exclusions: {} },
-  { id: 8, name: "LegalScan Bot", model: "claude-3-5-sonnet", dept: "Legal", status: "pending", autonomy: "Supervised", owner: "Legal Ops",
-    desc: "Reviews incoming vendor contracts against the legal playbook and flags non-standard clauses for counsel. Pending security review before activation.",
-    traits: tr("personalData", "euScope", "retrieval"), exclusions: {} },
-  { id: 9, name: "JobFit", model: "Claude (claude.ai skill)", dept: "Personal Projects", status: "pending", autonomy: "Supervised", owner: "John Smith",
-    desc: "Tailors a candidate's resume to a specific job posting. Fetches the posting from the web, scores fit from a recruiter's perspective, stops to ask the candidate about information gaps before rewriting, and produces an editable DOCX resume. Must never invent employers, dates, credentials, skills or metrics.",
-    traits: tr("personalData", "tools", "codeExec", "sharedOutput"), exclusions: {} },
-  { id: 10, name: "ClaimsGuide", model: "claude-3-5-sonnet", dept: "Operations", status: "pending", autonomy: "Semi-autonomous", owner: "Claims Ops",
-    desc: "Helps health-plan members in the US and EU file and track medical claims. Checks eligibility against plan documents, recommends approve or deny to claims examiners, pays approved claims through the payments API, sends members decision letters, remembers each member's claim history, and hands suspicious claims to the fraud-detection agent.",
-    traits: tr("consequential", "customerFacing", "personalData", "euScope", "healthData", "financialData", "externalComms", "sharedOutput", "tools", "retrieval", "multiAgent", "persistentMemory"), exclusions: {} },
-];
-
-// TODO: replace with your real form link (Tally / Google Form) before deploying
 const FEEDBACK_URL = "https://tally.so/r/YOUR-FORM-ID";
-
-const SEED_POLICIES_RAW = [
-  { id: "p1", tag: "Data Privacy", name: "Block PII Export to External APIs", desc: "Prevents any AI agent from sending personally identifiable information to external third-party APIs without explicit authorization.", action: "BLOCK", violations: 7, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11", doc: { name: "AI-POL-001 PII Export Policy v2.pdf", uploadedOn: "2026-02-11", seeded: true } },
-  { id: "p2", tag: "External Communication", name: "Require Approval for Outbound Emails", desc: "All agent-initiated outbound emails to external domains must receive human approval before sending.", action: "REQUIRE APPROVAL", violations: 3, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11", doc: { name: "AI-POL-002 Outbound Communications Approval.pdf", uploadedOn: "2026-02-11", seeded: true } },
-  { id: "p3", tag: "HIPAA", name: "Restrict HIPAA Record Access", desc: "Agents without explicit HIPAA clearance are blocked from accessing health-related records.", action: "BLOCK", violations: 12, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-01-20", doc: { name: "AI-POL-003 HIPAA Access Standard.pdf", uploadedOn: "2026-01-20", seeded: true } },
-  { id: "p4", tag: "GDPR", name: "Audit Financial Data Reads", desc: "Log all agent access to financial systems for SOX compliance.", action: "AUDIT", violations: 0, enabled: true, frameworks: [], owner: "Chief Compliance Officer", status: "approved", approvedBy: "Head of Internal Audit", approvedOn: "2025-04-10", doc: { name: "AI-POL-004 Financial Data Access Logging.pdf", uploadedOn: "2025-04-10", seeded: true } },
-  { id: "p5", tag: "Access Control", name: "Limit Full-Autonomy Agent Actions", desc: "Agents with full autonomy level require supervisor approval for any write operations.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-03-04", doc: { name: "AI-POL-005 Autonomy Levels and Write Approval.pdf", uploadedOn: "2026-03-04", seeded: true } },
-  { id: "p6", tag: "Access Control", name: "Block Admin Privilege Escalation", desc: "Prevents agents from acquiring admin permissions they were not originally granted.", action: "BLOCK", violations: 2, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "Chief Risk Officer", approvedOn: "2026-01-20", doc: { name: "AI-POL-006 Privileged Access for Agents.pdf", uploadedOn: "2026-01-20", seeded: true } },
-  { id: "p7", tag: "GDPR", name: "GDPR Data Deletion Compliance", desc: "Ensures agents processing EU customer data respect deletion requests within 72 hours.", action: "AUDIT", violations: 0, enabled: false, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-03-04", doc: { name: "AI-POL-007 GDPR Deletion Procedure.pdf", uploadedOn: "2026-03-04", seeded: true } },
-  { id: "p8", tag: "Custom", name: "Rate Limit External API Calls", desc: "Warns when an agent makes more than 1000 external API calls per hour.", action: "WARN", violations: 5, enabled: true, frameworks: [], owner: "Chief Technology Officer", status: "approved", approvedBy: "Chief Information Security Officer", approvedOn: "2026-04-15" },
-  { id: "p9", tag: "AI Security", name: "Prompt Injection Guardrail", desc: "Screens user input, retrieved documents and tool outputs for injected instructions, and blocks agent actions that originate from untrusted instructions.", action: "BLOCK", violations: 6, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06", doc: { name: "AI-SEC-009 Prompt Injection Guardrail Standard.pdf", uploadedOn: "2026-05-06", seeded: true } },
-  { id: "p10", tag: "AI Security", name: "Least-Privilege Tool Scope", desc: "Each agent may only call tools on its approved allowlist. Calls outside that scope are held for human approval.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06", doc: { name: "AI-SEC-010 Agent Tool Allowlist Standard.pdf", uploadedOn: "2026-05-06", seeded: true } },
-  { id: "p11", tag: "AI Security", name: "Block System Prompt and Secret Leakage", desc: "Filters agent responses for system prompt contents, credentials and other secrets before they leave the platform.", action: "BLOCK", violations: 1, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
-  { id: "p12", tag: "Incident Response", name: "Auto-Suspend Rogue Agents", desc: "Suspends an agent automatically after 3 critical violations within 6 hours and pages its owner. Reinstatement requires review.", action: "BLOCK", violations: 1, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06", doc: { name: "AI-IR-012 Agent Containment Runbook.pdf", uploadedOn: "2026-05-06", seeded: true } },
-  { id: "p13", tag: "Third-Party Risk", name: "Vet Third-Party Models and Tools", desc: "New model providers, plugins and MCP tools must pass a security and provenance review before any agent can use them.", action: "REQUIRE APPROVAL", violations: 0, enabled: true, frameworks: [], owner: "Chief Risk Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-12", doc: { name: "AI-TPR-013 Third-Party Model and Tool Review.pdf", uploadedOn: "2026-05-12", seeded: true } },
-];
-
-const SEED_AUDIT_RAW = [
-  { sev: "info", ts: "5/23/2026, 3:10:00 PM", type: "Agent Registered", agent: "ClaimsGuide", desc: "ClaimsGuide registered and pending security review before activation" },
-  { sev: "info", ts: "5/23/2026, 3:05:00 PM", type: "Agent Registered", agent: "JobFit", desc: "JobFit registered and pending security review before activation" },
-  { id: "v1", sev: "critical", ts: "5/21/2026, 11:42:25 AM", type: "Policy Violation", agent: "ThreatWatch AI", policy: "p8", desc: "ThreatWatch AI exceeded external API rate limit — 1,247 calls in 60 minutes" },
-  { sev: "critical", ts: "5/21/2026, 10:53:25 AM", type: "Agent Suspended", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha suspended automatically by Auto-Suspend Rogue Agents after 3 critical policy violations within 6 hours" },
-  { id: "v2", sev: "critical", ts: "5/21/2026, 10:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p1", desc: "FinanceBot Alpha accessed 3,400 EU customer PII records without GDPR deletion check" },
-  { id: "v3", sev: "critical", ts: "5/21/2026, 8:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p2", desc: "FinanceBot Alpha sent outbound emails to external vendors without approval" },
-  { id: "v4", sev: "critical", ts: "5/21/2026, 5:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p3", desc: "FinanceBot Alpha attempted to access HIPAA-tagged records without clearance" },
-  { sev: "warn", ts: "5/20/2026, 11:52:25 AM", type: "Risk Change", agent: "DataSync Pro", scoreFrom: 35, scoreTo: 42, desc: "DataSync Pro risk score updated from 35 to 42 after new financial data permissions added" },
-  { sev: "info", ts: "5/19/2026, 11:52:25 AM", type: "Agent Registered", agent: "LegalScan Bot", desc: "LegalScan Bot registered and pending security review before activation" },
-  { sev: "warn", ts: "5/18/2026, 11:52:25 AM", type: "Risk Change", agent: "ThreatWatch AI", levelTo: "HIGH", desc: "ThreatWatch AI risk level elevated to HIGH after external API access pattern detected" },
-  { sev: "info", ts: "5/16/2026, 11:52:25 AM", type: "Status Change", agent: "CodeReview AI", desc: "CodeReview AI status changed from pending to active after security clearance" },
-  { sev: "info", ts: "4/21/2026, 11:52:25 AM", type: "Agent Registered", agent: "Aria CX Bot", desc: "Aria CX Bot registered and activated for customer success department" },
-];
-
-
-// Seeded history is shifted so it always sits just before today (see timeline.js)
-const SEED_AUDIT = SEED_AUDIT_RAW.map(e => { const at = seedAt(e.ts); return { ...e, at, ts: fmtWhenLong(at) }; });
-const SEED_POLICIES = SEED_POLICIES_RAW.map(p => ({
-  ...p,
-  ...(p.approvedOn ? { approvedOn: seedDate(p.approvedOn) } : {}),
-  ...(p.doc?.uploadedOn ? { doc: { ...p.doc, uploadedOn: seedDate(p.doc.uploadedOn) } } : {}),
-}));
-const SEED_AGENTS = SEED_AGENTS_RAW.map(a => a.suspension
-  ? { ...a, suspension: { ...a.suspension, at: seedAt(a.suspension.on), on: fmtWhen(seedAt(a.suspension.on)) } }
-  : a);
 
 /* ---------------- themes ---------------- */
 
@@ -249,10 +174,10 @@ const SevDot = ({ sev, size = 16 }) => {
   return map[sev] || map.info;
 };
 
-const Card = ({ children, style, onClick }) => {
+const Card = ({ children, style, onClick, id }) => {
   const T = useT();
   return (
-    <div onClick={onClick} style={{
+    <div id={id} onClick={onClick} style={{
       background: T.panel, border: `1px solid ${T.border}`, borderRadius: 12, ...style,
     }}>{children}</div>
   );
@@ -403,20 +328,38 @@ const MAX_DOC_MB = 10;
 const todayISO = () => localISO();
 const fmtSize = b => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
 
-// Read an uploaded file into an in-memory link. Nothing leaves the browser.
-const toDocMeta = file => ({ name: file.name, size: file.size, url: URL.createObjectURL(file), uploadedOn: todayISO() });
+// Read an uploaded file into an in-memory link with a SHA-256 fingerprint. Nothing leaves the browser.
+const DOC_TYPES = { pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
+const sha256 = async file => {
+  const buf = await file.arrayBuffer();
+  const h = await crypto.subtle.digest("SHA-256", buf);
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, "0")).join("");
+};
 
 function DocUpload({ doc, onChange }) {
   const T = useT();
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [last, setLast] = useState(null);
+  const ingest = async file => {
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (!DOC_TYPES[ext]) { setErr("Upload a PDF or Word document (.pdf, .doc, .docx)."); return; }
+    if (file.type && !Object.values(DOC_TYPES).includes(file.type)) { setErr(`The file says it is ${file.type}, which doesn't match its .${ext} name.`); return; }
+    if (file.size === 0) { setErr("That file is empty."); return; }
+    if (file.size > MAX_DOC_MB * 1048576) { setErr(`Files must be ${MAX_DOC_MB} MB or smaller.`); return; }
+    setErr(""); setBusy(true); setLast(file);
+    try {
+      const hash = await sha256(file);
+      onChange({ name: file.name, size: file.size, type: file.type || DOC_TYPES[ext], sha256: hash, url: URL.createObjectURL(file), uploadedOn: todayISO() });
+      setLast(null);
+    } catch (x) {
+      setErr("Couldn't read the file. Check it isn't open elsewhere, then retry.");
+    } finally { setBusy(false); }
+  };
   const pick = e => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
-    if (!/\.(pdf|doc|docx)$/i.test(file.name)) { setErr("Upload a PDF or Word document."); return; }
-    if (file.size > MAX_DOC_MB * 1048576) { setErr(`Files must be ${MAX_DOC_MB} MB or smaller.`); return; }
-    setErr("");
-    onChange(toDocMeta(file));
+    if (file) ingest(file);
   };
   return (
     <div>
@@ -425,40 +368,50 @@ function DocUpload({ doc, onChange }) {
           <FileText size={16} color={T.blue} style={{ flexShrink: 0 }} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</div>
-            <div style={{ fontSize: 12, color: T.faint }}>{fmtSize(doc.size)}</div>
+            <div style={{ fontSize: 12, color: T.faint }}>{doc.size ? fmtSize(doc.size) : "Seeded placeholder"}{doc.sha256 ? <> · SHA-256 <span style={{ fontFamily: "ui-monospace, monospace" }} title={doc.sha256}>{doc.sha256.slice(0, 12)}…</span></> : ""}</div>
           </div>
           <button onClick={() => onChange(null)} aria-label="Remove document" style={{ background: "none", border: "none", color: T.dim, cursor: "pointer" }}><X size={16} /></button>
         </div>
       ) : (
         <label style={{
+          position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer",
           border: `1px dashed ${T.blueBorder}`, borderRadius: 8, padding: "12px", color: T.blue, fontSize: 13.5, fontWeight: 600,
           background: T.blueSoft,
         }}>
-          <Upload size={15} /> Upload approved policy (PDF or Word)
-          <input type="file" accept=".pdf,.doc,.docx" onChange={pick} style={{ display: "none" }} />
+          <Upload size={15} /> {busy ? "Checking and fingerprinting…" : "Upload approved policy (PDF or Word)"}
+          <input type="file" aria-label="Upload approved policy document" accept=".pdf,.doc,.docx" disabled={busy} onChange={pick} style={{ position: "absolute", width: 1, height: 1, opacity: 0 }} />
         </label>
       )}
-      {err && <div style={{ color: T.isDark ? "#f43f5e" : "#e11d48", fontSize: 12.5, marginTop: 6 }}>{err}</div>}
+      {busy && <div role="status" style={{ color: T.dim, fontSize: 12.5, marginTop: 6 }}>Reading the file and computing its SHA-256 fingerprint…</div>}
+      {err && (
+        <div role="alert" style={{ color: T.isDark ? "#f43f5e" : "#e11d48", fontSize: 12.5, marginTop: 6 }}>
+          {err} {last && <button onClick={() => ingest(last)} style={{ background: "none", border: "none", color: T.blue, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 12.5 }}>Retry</button>}
+        </div>
+      )}
       <div style={{ color: T.faint, fontSize: 11.5, marginTop: 6, lineHeight: 1.45 }}>
-        Demo: the file stays in this browser tab and is cleared on refresh. Don't upload confidential documents.
+        Demo: the file stays in this browser tab and is cleared on refresh, and it is not scanned for malware. In production, uploads would be malware-scanned before storage, kept as versioned evidence with their fingerprint, and retained per the evidence retention schedule. Don't upload confidential documents.
       </div>
     </div>
   );
 }
 
 // Approver picker + date, with a segregation-of-duties check against the owner
-function ApprovalFields({ owner, approvedBy, approvedOn, onChange }) {
+function ApprovalFields({ owner, approvedBy, approvedOn, onChange, recorded, requester }) {
   const T = useT();
+  const { user } = useActor();
   const sameAsOwner = approvedBy && approvedBy === owner;
+  // approving in ARGUS: you act in one of your own roles. Recording an outside approval: name the role that approved it.
+  const options = (recorded ? POLICY_ROLES : user.roles).filter(r => r !== owner);
   return (
     <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "1fr" : "1.5fr 1fr", gap: 12 }}>
       <div>
-        <label style={labelStyle(T)}>Approved by</label>
-        <select style={fieldStyle(T)} value={approvedBy} onChange={e => onChange({ approvedBy: e.target.value })}>
-          <option value="">Select approver…</option>
-          {POLICY_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+        <label htmlFor="approval-role" style={labelStyle(T)}>{recorded ? "Approved by (role)" : "Approve as (your role)"}</label>
+        <select id="approval-role" style={fieldStyle(T)} value={approvedBy} onChange={e => onChange({ approvedBy: e.target.value })}>
+          <option value="">{recorded ? "Select the approving role…" : "Approve as…"}</option>
+          {options.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
+        {!recorded && <NotAllowed action="policy.approve" ctx={{ owner, requester }} compact />}
         {sameAsOwner && (
           <div style={{ color: T.isDark ? "#f59e0b" : "#b45309", fontSize: 12.5, marginTop: 6, lineHeight: 1.45 }}>
             The approver should be independent of the policy owner. Choose a different role.
@@ -466,8 +419,8 @@ function ApprovalFields({ owner, approvedBy, approvedOn, onChange }) {
         )}
       </div>
       <div>
-        <label style={labelStyle(T)}>Approval date</label>
-        <input type="date" style={fieldStyle(T)} value={approvedOn} max={todayISO()} onChange={e => onChange({ approvedOn: e.target.value })} />
+        <label htmlFor="approval-date" style={labelStyle(T)}>Approval date</label>
+        <input id="approval-date" type="date" style={fieldStyle(T)} value={approvedOn} max={todayISO()} onChange={e => onChange({ approvedOn: e.target.value })} />
       </div>
     </div>
   );
@@ -491,7 +444,7 @@ function CreatePolicyModal({ onClose, onCreate, initialTemplate, policies }) {
 
   const tpl = RECOMMENDED_POLICIES.find(x => x.id === f.templateId);
   const adopted = new Set(policies.map(p => p.id));
-  const approvalOk = !f.approved || (f.approvedBy && f.approvedBy !== f.owner && f.approvedOn);
+  const approvalOk = !f.approved || (f.approvedBy && f.approvedBy !== f.owner && f.approvedOn && f.doc);
   const valid = f.name.trim() && f.desc.trim() && f.owner && approvalOk;
 
   return (
@@ -566,17 +519,17 @@ function CreatePolicyModal({ onClose, onCreate, initialTemplate, policies }) {
             <input type="checkbox" checked={f.approved} onChange={e => set({ approved: e.target.checked })}
               style={{ width: 17, height: 17, marginTop: 1, accentColor: T.blue, flexShrink: 0 }} />
             <span>
-              <span style={{ fontSize: 14, fontWeight: 700, display: "block" }}>This policy has been approved</span>
+              <span style={{ fontSize: 14, fontWeight: 700, display: "block" }}>Already approved outside ARGUS</span>
               <span style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.45, display: "block", marginTop: 2 }}>
                 {f.approved
-                  ? (f.doc ? "The uploaded document will be kept as approval evidence." : "Tip: upload the signed document above as approval evidence.")
-                  : "Leave unchecked to save as a draft. Drafts don't count toward coverage until approved."}
+                  ? (f.doc ? "The signed document is kept as approval evidence, and the approval is recorded as made outside ARGUS." : "Upload the signed document above. It's required as evidence of an approval made outside ARGUS.")
+                  : "Leave unchecked to save as a draft. Someone other than you then approves it in ARGUS. Drafts don't count toward coverage."}
               </span>
             </span>
           </label>
           {f.approved && (
             <div style={{ marginTop: 12 }}>
-              <ApprovalFields owner={f.owner} approvedBy={f.approvedBy} approvedOn={f.approvedOn} onChange={set} />
+              <ApprovalFields recorded owner={f.owner} approvedBy={f.approvedBy} approvedOn={f.approvedOn} onChange={set} />
             </div>
           )}
         </div>
@@ -616,14 +569,17 @@ function CreatePolicyModal({ onClose, onCreate, initialTemplate, policies }) {
 
 function ApprovePolicyModal({ policy, onClose, onApprove }) {
   const T = useT();
+  const { user } = useActor();
   const [a, setA] = useState({ approvedBy: "", approvedOn: todayISO(), doc: policy.doc || null });
   const set = patch => setA(s => ({ ...s, ...patch }));
-  const valid = a.approvedBy && a.approvedBy !== policy.owner && a.approvedOn;
+  const requester = policy.revisedBy || policy.createdBy;
+  const valid = a.approvedBy && a.approvedBy !== policy.owner && a.approvedOn && can(user, "policy.approve", { role: a.approvedBy, owner: policy.owner, requester }).ok;
   return (
     <Modal title="Approve policy" subtitle={`${policy.name}. Once approved, it counts toward every framework requirement it is mapped to.`} onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ fontSize: 13.5, color: T.dim }}>Policy owner: <b style={{ color: T.text }}>{policy.owner}</b></div>
-        <ApprovalFields owner={policy.owner} approvedBy={a.approvedBy} approvedOn={a.approvedOn} onChange={set} />
+        <div style={{ fontSize: 13, color: T.dim }}>Approving version <b style={{ color: T.text }}>{policy.version || 1}</b>{policy.revision ? `: ${policy.revision}` : ""}. The approval is bound to this version.</div>
+        <ApprovalFields owner={policy.owner} approvedBy={a.approvedBy} approvedOn={a.approvedOn} onChange={set} requester={requester} />
         <div>
           <label style={labelStyle(T)}>Approved document</label>
           <DocUpload doc={a.doc} onChange={doc => set({ doc })} />
@@ -636,6 +592,318 @@ function ApprovePolicyModal({ policy, onClose, onApprove }) {
         </button>
       </div>
     </Modal>
+  );
+}
+
+/* ---------------- simulated identity ---------------- */
+
+const ActorCtx = createContext({ user: DEFAULT_USER, actAs: () => {} });
+const useActor = () => useContext(ActorCtx);
+// first demo user who would be allowed, to offer a one-click switch
+const suggestUser = (action, ctx) => DEMO_USERS.find(u => can(u, action, ctx).ok) || null;
+
+function NotAllowed({ action, ctx, why, compact }) {
+  const T = useT();
+  const { user, actAs } = useActor();
+  const r = can(user, action, ctx);
+  if (r.ok) return null;
+  const alt = suggestUser(action, ctx);
+  return (
+    <div role="note" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 12.5, lineHeight: 1.45, marginTop: compact ? 6 : 10, background: T.panelSoft, border: `1px dashed ${T.border}`, borderRadius: 8, padding: "8px 11px", color: T.dim }}>
+      <UserCheck size={14} color={T.faint} style={{ flexShrink: 0 }} />
+      <span style={{ flex: "1 1 220px" }}>Acting as <b style={{ color: T.text }}>{user.name}</b>. {why ? `${why} ` : ""}{r.reason}</span>
+      {alt && <button onClick={() => actAs(alt.id)} style={{ background: "none", border: "none", color: T.blue, fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>Act as {alt.name}</button>}
+    </div>
+  );
+}
+
+function IdentitySwitcher() {
+  const T = useT();
+  const { user, actAs } = useActor();
+  return (
+    <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 8px 0", marginTop: "auto" }}>
+      <label htmlFor="acting-as" style={{ display: "block", color: T.faint, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", marginBottom: 6 }}>ACTING AS (SIMULATED)</label>
+      <select id="acting-as" value={user.id} onChange={e => actAs(e.target.value)} style={{ ...fieldStyle(T), padding: "8px 10px", fontSize: 13 }}>
+        {DEMO_USERS.map(u => <option key={u.id} value={u.id}>{u.name} · {u.title}</option>)}
+      </select>
+      <div style={{ color: T.faint, fontSize: 11.5, marginTop: 6, lineHeight: 1.4 }}>
+        {user.roles.length ? user.roles.join(", ") : `Owner: ${user.teams.join(", ")}`}. No real sign-in; checks run in this browser only.
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- control evidence and testing ---------------- */
+
+const EFFECT_STYLE = (T, state) => {
+  const tone = EFFECT[state].tone;
+  return tone === "good" ? T.risk.LOW : tone === "bad" ? T.risk.CRITICAL : T.risk.MEDIUM;
+};
+function EffectPill({ policy, agentId }) {
+  const T = useT();
+  const e = effectiveness(policy, agentId);
+  const st = EFFECT_STYLE(T, e.state);
+  return <span title={e.reason}><Pill small fg={st.fg} bg={st.bg} border={st.border}>{e.state === "effective" ? "✓ " : "! "}{EFFECT[e.state].label}</Pill></span>;
+}
+
+function TestForm({ policy, agents, onSave, onCancel }) {
+  const T = useT();
+  const { user } = useActor();
+  const [f, setF] = useState({ result: "pass", testedOn: localISO(), evidence: "", owner: user.roles[0] || "", scope: "all", validDays: 365 });
+  const set = p => setF(x => ({ ...x, ...p }));
+  const ok = f.evidence.trim() && f.owner && f.testedOn && f.testedOn <= localISO();
+  const id = `test-${policy.id}`;
+  return (
+    <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 9 }}>
+      <div style={{ fontSize: 13, fontWeight: 700 }}>Record a test of version {policy.version || 1}</div>
+      <fieldset style={{ border: "none", padding: 0, margin: 0, display: "flex", gap: 14 }}>
+        <legend style={{ ...labelStyle(T), marginBottom: 4 }}>Result</legend>
+        {[["pass", "Passed"], ["fail", "Failed"]].map(([v, l]) => (
+          <label key={v} style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+            <input type="radio" name={`${id}-result`} checked={f.result === v} onChange={() => set({ result: v })} /> {l}
+          </label>
+        ))}
+      </fieldset>
+      <div>
+        <label htmlFor={`${id}-ev`} style={labelStyle(T)}>Test performed and evidence (required)</label>
+        <input id={`${id}-ev`} value={f.evidence} onChange={e => set({ evidence: e.target.value })} placeholder="e.g. TEST-0501: replayed 50 blocked payloads, all blocked" style={fieldStyle(T)} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "1fr" : "1fr 1fr", gap: 9 }}>
+        <div>
+          <label htmlFor={`${id}-on`} style={labelStyle(T)}>Test date</label>
+          <input id={`${id}-on`} type="date" max={localISO()} value={f.testedOn} onChange={e => set({ testedOn: e.target.value })} style={fieldStyle(T)} />
+        </div>
+        <div>
+          <label htmlFor={`${id}-valid`} style={labelStyle(T)}>Evidence valid for</label>
+          <select id={`${id}-valid`} value={f.validDays} onChange={e => set({ validDays: Number(e.target.value) })} style={fieldStyle(T)}>
+            {[90, 180, 365].map(d => <option key={d} value={d}>{d} days</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={`${id}-owner`} style={labelStyle(T)}>Evidence owner (your role)</label>
+          <select id={`${id}-owner`} value={f.owner} onChange={e => set({ owner: e.target.value })} style={fieldStyle(T)}>
+            {user.roles.map(r => <option key={r}>{r}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor={`${id}-scope`} style={labelStyle(T)}>Agents covered</label>
+          <select id={`${id}-scope`} value={f.scope} onChange={e => set({ scope: e.target.value })} style={fieldStyle(T)}>
+            <option value="all">All agents in scope</option>
+            {agents.map(a => <option key={a.id} value={a.id}>{a.name} only</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button disabled={!ok} onClick={() => onSave({ ...f, evidence: f.evidence.trim(), scope: f.scope === "all" ? "all" : [Number(f.scope) || f.scope] })} style={btnStyle(T, true, !!ok)}>Save test result</button>
+        <button onClick={onCancel} style={btnStyle(T, false)}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function ControlEvidence({ p, agents, onTest, onRevise }) {
+  const T = useT();
+  const { user } = useActor();
+  const [mode, setMode] = useState(null);
+  const [summary, setSummary] = useState("");
+  const [hist, setHist] = useState(false);
+  const green = T.isDark ? "#34d399" : "#059669", amber = T.isDark ? "#f59e0b" : "#b45309";
+  const attrs = attributes(p);
+  const tests = [...(p.tests || [])].sort((a, b) => (b.testedOn > a.testedOn ? 1 : -1));
+  const users = agents.filter(a => a.mapping.policies.some(m => m.id === p.id && !m.excluded));
+  const perm = can(user, "policy.manage");
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <EffectPill policy={p} />
+        <span style={{ fontSize: 11.5, color: T.faint }}>v{p.version || 1}{users.length ? ` · ${users.length} agent${users.length > 1 ? "s" : ""} in scope` : ""}</span>
+      </div>
+      <ul aria-label="Control attributes" style={{ listStyle: "none", padding: 0, margin: "8px 0 0", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "4px 10px" }}>
+        {attrs.map(a => (
+          <li key={a.key} title={a.detail} style={{ display: "flex", gap: 5, alignItems: "flex-start", fontSize: 12, lineHeight: 1.35 }}>
+            {a.ok ? <CheckCircle2 size={13} color={green} style={{ flexShrink: 0, marginTop: 1 }} /> : <AlertCircle size={13} color={amber} style={{ flexShrink: 0, marginTop: 1 }} />}
+            <span><b>{a.label}</b> <span style={{ color: T.faint }}>{a.detail}</span></span>
+          </li>
+        ))}
+      </ul>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
+        <button disabled={!perm.ok || p.status === "draft"} title={perm.reason || (p.status === "draft" ? "Approve this version before testing it" : "")} onClick={() => setMode(mode === "test" ? null : "test")} style={{ ...btnStyle(T, false, perm.ok && p.status !== "draft"), padding: "4px 10px", fontSize: 12 }}>Record test…</button>
+        <button disabled={!perm.ok} title={perm.reason} onClick={() => setMode(mode === "revise" ? null : "revise")} style={{ ...btnStyle(T, false, perm.ok), padding: "4px 10px", fontSize: 12 }}>New version…</button>
+        {tests.length > 0 && <button aria-expanded={hist} onClick={() => setHist(h => !h)} style={{ background: "none", border: "none", color: T.blue, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>{hist ? "Hide" : "Show"} test history ({tests.length})</button>}
+      </div>
+      {!perm.ok && <NotAllowed action="policy.manage" compact />}
+      {mode === "test" && <TestForm policy={p} agents={users} onCancel={() => setMode(null)} onSave={t => { onTest(p.id, t); setMode(null); }} />}
+      {mode === "revise" && (
+        <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>Publish version {(p.version || 1) + 1}</div>
+          <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.45 }}>A new version goes back to draft until someone other than you approves it, and test results on version {p.version || 1} become stale. Assessments that relied on them drop until it is re-tested.</div>
+          <label htmlFor={`rev-${p.id}`} style={labelStyle(T)}>What changed (required)</label>
+          <input id={`rev-${p.id}`} value={summary} onChange={e => setSummary(e.target.value)} style={fieldStyle(T)} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button disabled={!summary.trim()} onClick={() => { onRevise(p.id, summary.trim()); setMode(null); setSummary(""); }} style={btnStyle(T, true, !!summary.trim())}>Create draft version</button>
+            <button onClick={() => setMode(null)} style={btnStyle(T, false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {hist && (
+        <ol style={{ listStyle: "none", padding: 0, margin: "8px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
+          {tests.map(t => (
+            <li key={t.id} style={{ fontSize: 12, lineHeight: 1.45, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px" }}>
+              <b style={{ color: t.result === "pass" ? green : (T.isDark ? "#f43f5e" : "#e11d48") }}>{t.result === "pass" ? "Passed" : "Failed"}</b> {t.testedOn} on v{t.version || 1}
+              {t.scope !== "all" && <> · {agents.filter(a => t.scope.includes(a.id)).map(a => a.name).join(", ")} only</>}
+              <div style={{ color: T.dim }}>{t.evidence}</div>
+              <div style={{ color: T.faint }}>Owner {t.owner} · recorded by {t.by} · valid until {t.expiresOn}{t.synthetic ? " · synthetic" : ""}</div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- audit investigation ---------------- */
+
+const OUTCOME_LABEL = { success: "Success", denied: "Denied", detected: "Detected" };
+
+function AuditTrail({ audit, agents, policies, onOpenAgent, onOpenPolicy, notify }) {
+  const T = useT();
+  const { user } = useActor();
+  const all = can(user, "audit.all").ok;
+  const mine = new Set(agents.filter(a => ownsAgent(user, a)).map(a => a.name));
+  const visible = all ? audit : audit.filter(e => mine.has(e.agent) || e.agent === "—");
+  const [f, setF] = useState({ q: "", agent: "all", type: "all", actor: "all", outcome: "all", from: "", to: "", corr: "" });
+  const [open, setOpen] = useState(null);
+  const [check, setCheck] = useState(null);
+  const set = p => setF(x => ({ ...x, ...p }));
+  const uniq = k => [...new Set(visible.map(k))].filter(Boolean).sort();
+  const day = at => localISO(new Date(at));
+  const shown = visible.filter(e =>
+    (f.agent === "all" || e.agent === f.agent) && (f.type === "all" || e.type === f.type) &&
+    (f.actor === "all" || e.actor?.name === f.actor) && (f.outcome === "all" || (e.outcome || "success") === f.outcome) &&
+    (!f.from || day(e.at) >= f.from) && (!f.to || day(e.at) <= f.to) && (!f.corr || e.correlation === f.corr) &&
+    (!f.q || [e.eid, e.desc, e.type, e.agent, e.actor?.name].join(" ").toLowerCase().includes(f.q.toLowerCase())));
+  const filtered = Object.entries(f).some(([k, v]) => v && v !== "all");
+  const sel = { ...fieldStyle(T), width: "auto", flex: T.mobile ? "1 1 45%" : "0 1 180px", padding: "8px 10px", fontSize: 13 };
+  const red = T.isDark ? "#f43f5e" : "#e11d48", green = T.isDark ? "#34d399" : "#059669";
+
+  const exportCsv = () => {
+    downloadFile("argus-audit-trail.csv", toCSV([
+      ["Event ID", "Time (ISO 8601 UTC)", "Time (local)", "Type", "Severity", "Outcome", "Agent", "Actor", "Accountable role", "Entity", "Entity version", "Before", "After", "Correlation ID", "Description", "Synthetic", "Hash"],
+      ...shown.map(e => [e.eid, new Date(e.at).toISOString(), e.ts, e.type, e.sev, e.outcome || "success", e.agent, e.actor?.name, e.actor?.role,
+        e.entity ? `${e.entity.kind}:${e.entity.id}` : "", e.entity?.version ?? "", e.before ? JSON.stringify(e.before) : "", e.after ? JSON.stringify(e.after) : "",
+        e.correlation || "", redact(e.desc), e.synthetic ? "yes" : "no", e.hash]),
+    ]), "text/csv;charset=utf-8");
+    notify(`Exported ${shown.length} event${shown.length === 1 ? "" : "s"}`);
+  };
+  const related = e => {
+    const links = [];
+    if (e.agent && e.agent !== "—" && agents.some(a => a.name === e.agent)) links.push(<button key="a" onClick={() => onOpenAgent(e.agent)} style={linkBtn(T)}>Open {e.agent}</button>);
+    const pid = e.entity?.kind === "policy" ? e.entity.id : e.policy;
+    const pol = pid && policies.find(p => p.id === pid);
+    if (pol) links.push(<button key="p" onClick={() => onOpenPolicy(pol.id)} style={linkBtn(T)}>Open policy “{pol.name}”</button>);
+    if (e.correlation) links.push(<button key="c" onClick={() => set({ corr: e.correlation })} style={linkBtn(T)}>All events in {e.correlation}</button>);
+    return links;
+  };
+
+  return (
+    <div>
+      <PageHeader title="Audit Trail" subtitle="Append-only ledger of platform events and governance actions, with who acted, in which role, and what changed.">
+        <button onClick={exportCsv} disabled={!shown.length} style={{ display: "flex", alignItems: "center", gap: 8, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 8, padding: "9px 16px", fontSize: 14, cursor: shown.length ? "pointer" : "not-allowed" }}>
+          <Download size={15} /> Export {filtered ? "filtered " : ""}CSV
+        </button>
+      </PageHeader>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 12.5, color: T.dim, marginTop: 12, lineHeight: 1.5 }}>
+        <span>{all ? `Showing all ${audit.length} events.` : `Acting as ${user.name}: showing ${visible.length} events for your agents and program-wide events.`} Seeded history is synthetic and marked as such. Free text is screened for secrets and personal data before it is logged.</span>
+        <button onClick={() => setCheck(verifyChain(audit))} style={linkBtn(T)}>Verify ledger integrity</button>
+        {check && <span role="status" style={{ fontWeight: 700, color: check.ok ? green : red }}>{check.ok ? `Checksum chain intact across ${check.checked} events (demo checksum, not cryptographic)` : `Chain broken at ${check.at}`}</span>}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "14px 0" }} role="search" aria-label="Filter audit events">
+        <input aria-label="Search events" value={f.q} onChange={e => set({ q: e.target.value })} placeholder="Search ID, text, actor…" style={{ ...sel, flex: T.mobile ? "1 1 100%" : "1 1 220px" }} />
+        <select aria-label="Agent" value={f.agent} onChange={e => set({ agent: e.target.value })} style={sel}><option value="all">Any agent</option>{uniq(e => e.agent).map(v => <option key={v}>{v}</option>)}</select>
+        <select aria-label="Event type" value={f.type} onChange={e => set({ type: e.target.value })} style={sel}><option value="all">Any event type</option>{uniq(e => e.type).map(v => <option key={v}>{v}</option>)}</select>
+        <select aria-label="Actor" value={f.actor} onChange={e => set({ actor: e.target.value })} style={sel}><option value="all">Any actor</option>{uniq(e => e.actor?.name).map(v => <option key={v}>{v}</option>)}</select>
+        <select aria-label="Outcome" value={f.outcome} onChange={e => set({ outcome: e.target.value })} style={sel}><option value="all">Any outcome</option>{Object.entries(OUTCOME_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+        <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12.5, color: T.dim }}>From <input type="date" aria-label="From date" value={f.from} onChange={e => set({ from: e.target.value })} style={{ ...sel, flex: "0 0 auto" }} /></label>
+        <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12.5, color: T.dim }}>To <input type="date" aria-label="To date" value={f.to} onChange={e => set({ to: e.target.value })} style={{ ...sel, flex: "0 0 auto" }} /></label>
+        {f.corr && <Pill fg={T.blue} bg={T.blueSoft} border={T.blueBorder}>Correlation {f.corr}</Pill>}
+        {filtered && <button onClick={() => set({ q: "", agent: "all", type: "all", actor: "all", outcome: "all", from: "", to: "", corr: "" })} style={linkBtn(T)}>Clear filters</button>}
+      </div>
+      <div style={{ fontSize: 13, color: T.faint, marginBottom: 10 }} aria-live="polite">Showing {shown.length} of {visible.length} events</div>
+
+      {shown.length === 0 ? <Card style={{ padding: 28, textAlign: "center", color: T.faint }}>No events match these filters.</Card> : (
+        <Card style={{ overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+              <caption style={{ position: "absolute", left: -9999 }}>Audit events, newest first</caption>
+              <thead>
+                <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 12.5, textAlign: "left" }}>
+                  {["", "Time", "Event", "Agent", "Actor", "Outcome", "Description"].map((h, i) => <th key={i} scope="col" style={{ padding: "11px 12px", fontWeight: 600, whiteSpace: "nowrap" }}>{h || <span style={{ position: "absolute", left: -9999 }}>Severity</span>}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map(e => {
+                  const isOpen = open === e.eid;
+                  const oc = e.outcome || "success";
+                  return (
+                    <React.Fragment key={e.eid}>
+                      <tr style={{ borderTop: `1px solid ${T.border}`, verticalAlign: "top" }}>
+                        <td style={{ padding: "11px 12px", width: 20 }}><SevDot sev={e.sev} /><span style={{ position: "absolute", left: -9999 }}>{e.sev}</span></td>
+                        <td style={{ padding: "11px 12px", fontSize: 12.5, color: T.dim, whiteSpace: "nowrap" }}>
+                          <time dateTime={new Date(e.at).toISOString()}>{e.ts}</time><div style={{ color: T.faint, fontSize: 11.5 }}>{age(e.at)}</div>
+                        </td>
+                        <td style={{ padding: "11px 12px" }}>
+                          <Pill small fg={T.text} bg={T.panelSoft} border={T.border}>{e.type}</Pill>
+                          <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, color: T.faint, marginTop: 4 }}>{e.eid}{e.synthetic ? " · synthetic" : ""}</div>
+                        </td>
+                        <td style={{ padding: "11px 12px", fontWeight: 600, fontSize: 13.5, whiteSpace: "nowrap" }}>{e.agent}</td>
+                        <td style={{ padding: "11px 12px", fontSize: 13 }}>{e.actor?.name}<div style={{ color: T.faint, fontSize: 11.5 }}>{e.actor?.role}</div></td>
+                        <td style={{ padding: "11px 12px", fontSize: 12.5, fontWeight: 700, color: oc === "denied" ? red : oc === "detected" ? (T.isDark ? "#f59e0b" : "#b45309") : green }}>{OUTCOME_LABEL[oc]}</td>
+                        <td style={{ padding: "11px 12px", fontSize: 13.5 }}>
+                          {e.desc}
+                          <div><button aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : e.eid)} style={{ ...linkBtn(T), marginTop: 4 }}>{isOpen ? "Hide details" : "Details"}</button></div>
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr><td colSpan={7} style={{ padding: "0 12px 12px 44px" }}>
+                          <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 14px", margin: 0, fontSize: 12.5, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px" }}>
+                            <dt style={{ color: T.faint }}>Record</dt><dd style={{ margin: 0 }}>{e.entity ? `${e.entity.kind} ${e.entity.id}${e.entity.version !== undefined ? ` (version ${e.entity.version})` : ""}` : "—"}</dd>
+                            <dt style={{ color: T.faint }}>Change</dt><dd style={{ margin: 0, fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{e.before || e.after ? `${JSON.stringify(e.before || {})} → ${JSON.stringify(e.after || {})}` : "—"}</dd>
+                            <dt style={{ color: T.faint }}>Correlation</dt><dd style={{ margin: 0 }}>{e.correlation || "—"}</dd>
+                            <dt style={{ color: T.faint }}>Recorded</dt><dd style={{ margin: 0 }}>{fmtWhenLong(e.at)} ({new Date(e.at).toISOString()}){e.synthetic ? " · synthetic demo history" : ""}</dd>
+                            <dt style={{ color: T.faint }}>Checksum</dt><dd style={{ margin: 0, fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{e.hash} (previous {e.prev})</dd>
+                            <dt style={{ color: T.faint }}>Related</dt><dd style={{ margin: 0, display: "flex", gap: 12, flexWrap: "wrap" }}>{related(e).length ? related(e) : "—"}</dd>
+                          </dl>
+                        </td></tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+const linkBtn = T => ({ background: "none", border: "none", color: T.blue, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0 });
+
+/* ---------------- architecture provenance ---------------- */
+
+function Provenance({ agent, arch }) {
+  const T = useT();
+  const att = agent.attest?.arch;
+  return (
+    <div style={{ display: "flex", gap: 10, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 13px", margin: "0 0 14px", fontSize: 12.5, lineHeight: 1.5, color: T.dim }}>
+      <Info size={15} color={T.blue} style={{ flexShrink: 0, marginTop: 2 }} />
+      <div>
+        <div><b style={{ color: T.text }}>Source:</b> {arch.generated ? "generated by ARGUS from the agent's declared characteristics" : `declared by the owner (${agent.owner})`}. <b style={{ color: T.text }}>Last verified:</b> {att ? `confirmed by ${att.by} on ${att.on}` : "not yet confirmed by the owner"}.</div>
+        <div><b style={{ color: T.text }}>Observed runtime architecture:</b> not available. No runtime integration is connected, so ARGUS can't compare this against what the agent actually calls and can't detect mismatches.</div>
+      </div>
+    </div>
   );
 }
 
@@ -747,22 +1015,26 @@ function RecentAlerts({ audit, agents, openAgent }) {
 
 function DecisionForm({ agent, kind, blockers, life, onCancel }) {
   const T = useT();
+  const { user } = useActor();
+  const [rev] = useState(agent.rev || 0);
   const [by, setBy] = useState("");
   const [reason, setReason] = useState("");
   const [until, setUntil] = useState(addDays(30));
   const maxUntil = addDays(EXCEPTION_MAX_DAYS);
-  const byOk = by && by !== agent.owner;
+  const perm = can(user, kind === "exception" ? "agent.exception" : "agent.suspend", { agent });
+  const byOk = by && by !== agent.owner && perm.ok;
   const ok = byOk && reason.trim() && (kind === "suspend" || (until && until <= maxUntil && until > localISO()));
   const id = `${kind}-${agent.id}`;
   return (
     <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 9 }}>
       <div style={{ fontSize: 13, fontWeight: 700 }}>{kind === "exception" ? "Approve a time-limited exception" : "Suspend this agent"}</div>
       <div>
-        <label htmlFor={`${id}-by`} style={labelStyle(T)}>Decided by (not the owner, {agent.owner})</label>
+        <label htmlFor={`${id}-by`} style={labelStyle(T)}>Decide as (your role; not the owner, {agent.owner})</label>
         <select id={`${id}-by`} value={by} onChange={e => setBy(e.target.value)} style={fieldStyle(T)}>
           <option value="">Select role…</option>
-          {POLICY_ROLES.map(r => <option key={r}>{r}</option>)}
+          {user.roles.map(r => <option key={r}>{r}</option>)}
         </select>
+        <NotAllowed action={kind === "exception" ? "agent.exception" : "agent.suspend"} ctx={{ agent }} compact />
       </div>
       <div>
         <label htmlFor={`${id}-why`} style={labelStyle(T)}>{kind === "exception" ? "Why this risk can be carried for now (required)" : "Reason for suspension (required)"}</label>
@@ -776,8 +1048,8 @@ function DecisionForm({ agent, kind, blockers, life, onCancel }) {
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button disabled={!ok} onClick={() => kind === "exception"
-          ? life.grantException(agent.id, { by, reason: reason.trim(), until, gates: blockers.map(b => b.id) })
-          : life.suspend(agent.id, { by, reason: reason.trim() })} style={btnStyle(T, true, !!ok)}>
+          ? life.grantException(agent.id, { by, reason: reason.trim(), until, gates: blockers.map(b => b.id), rev })
+          : life.suspend(agent.id, { by, reason: reason.trim(), rev })} style={btnStyle(T, true, !!ok)}>
           {kind === "exception" ? "Approve exception" : "Suspend agent"}
         </button>
         <button onClick={onCancel} style={btnStyle(T, false)}>Cancel</button>
@@ -820,6 +1092,7 @@ function GateCard({ agent, policies, audit, actions, life, ctx }) {
           Approved by <b>{agent.exception.by}</b> on {agent.exception.on} until <b>{agent.exception.until}</b>: {agent.exception.reason}. The blockers below still need fixing before then.
         </div>
       )}
+      {op.blockers.some(b => b.subs && b.id === "violation") && <NotAllowed action="agent.owner" ctx={{ agent }} why="Root causes and re-tests are recorded by the owner." />}
       <div style={{ marginTop: 8 }}>
         {op.blockers.map(b => (
           <div key={b.id} style={{ display: "flex", gap: 10, padding: "10px 0", borderTop: `1px solid ${T.border}` }}>
@@ -845,6 +1118,8 @@ function GateCard({ agent, policies, audit, actions, life, ctx }) {
 
 function GatesSettings({ gates, onChange }) {
   const T = useT();
+  const { user } = useActor();
+  const locked = !can(user, "gates.configure").ok;
   const sel = { ...fieldStyle(T), width: "auto", padding: "7px 9px", fontSize: 13 };
   const row = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", padding: "9px 0", borderTop: `1px solid ${T.border}` };
   return (
@@ -853,6 +1128,8 @@ function GatesSettings({ gates, onChange }) {
       <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.5, margin: "3px 0 8px" }}>
         Checked against each agent's worst individual scenario, not just its aggregate score. Failing agents are flagged, never switched off automatically. Changes are logged. Evaluated in the browser for this demo, not enforced at runtime.
       </div>
+      <NotAllowed action="gates.configure" compact />
+      <fieldset disabled={locked} style={{ border: "none", padding: 0, margin: 0 }}>
       <div style={row}>
         <label htmlFor="gate-act" style={{ fontSize: 13 }}>Activation and reinstatement: block on untreated risk at</label>
         <select id="gate-act" value={gates.activationRisk} onChange={e => onChange({ activationRisk: Number(e.target.value) })} style={sel}>
@@ -875,6 +1152,7 @@ function GatesSettings({ gates, onChange }) {
         <label htmlFor="gate-viol" style={{ fontSize: 13 }}>Continued operation: flag open critical violations</label>
         <input id="gate-viol" type="checkbox" checked={gates.operateViolations} onChange={e => onChange({ operateViolations: e.target.checked })} style={{ width: 18, height: 18 }} />
       </div>
+      </fieldset>
     </Card>
   );
 }
@@ -1303,7 +1581,7 @@ function PolicyMeta({ p, onApprove }) {
       ) : p.approvedBy && (
         <div style={{ display: "flex", alignItems: "center", gap: 5, color: T.dim }}>
           <BadgeCheck size={14} color={green} style={{ flexShrink: 0 }} />
-          <span>Approved by <span style={{ color: T.text, fontWeight: 600 }}>{p.approvedBy}</span> · <span style={{ whiteSpace: "nowrap" }}>{p.approvedOn}</span></span>
+          <span>Approved by <span style={{ color: T.text, fontWeight: 600 }}>{p.approvedBy}</span> · <span style={{ whiteSpace: "nowrap" }}>{p.approvedOn}</span>{p.approvalSource === "recorded" ? " · recorded from outside ARGUS" : ""}</span>
         </div>
       )}
       {(p.doc || tpl) && (
@@ -1326,7 +1604,7 @@ function PolicyMeta({ p, onApprove }) {
   );
 }
 
-function PolicyEngine({ policies, reqMap, toggle, onOpenCreate, onApprove }) {
+function PolicyEngine({ policies, reqMap, toggle, onOpenCreate, onApprove, agents, onTest, onRevise }) {
   const T = useT();
   const [group, setGroup] = useState("all");
   const [action, setAction] = useState("all");
@@ -1393,7 +1671,7 @@ function PolicyEngine({ policies, reqMap, toggle, onOpenCreate, onApprove }) {
           const a = T.action[p.action];
           const tags = fws.slice(0, 5);
           return (
-            <Card key={p.id} style={{ display: "flex", flexDirection: "column", opacity: p.enabled ? 1 : 0.6, transition: "opacity .15s" }}>
+            <Card key={p.id} id={`policy-${p.id}`} style={{ display: "flex", flexDirection: "column", opacity: p.enabled ? 1 : 0.75, transition: "opacity .15s", scrollMarginTop: 20 }}>
               <div style={{ padding: "18px 18px 14px", flex: 1 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                   <Pill fg={T.dim} bg={T.panelSoft} border={T.border}>{p.tag}</Pill>
@@ -1417,6 +1695,7 @@ function PolicyEngine({ policies, reqMap, toggle, onOpenCreate, onApprove }) {
                   </div>
                 )}
                 <PolicyMeta p={p} onApprove={onApprove} />
+                <ControlEvidence p={p} agents={agents} onTest={onTest} onRevise={onRevise} />
               </div>
               <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <Pill fg={a.fg} bg={a.bg}>Action: {p.action}</Pill>
@@ -1432,71 +1711,6 @@ function PolicyEngine({ policies, reqMap, toggle, onOpenCreate, onApprove }) {
   );
 }
 
-function AuditTrail({ audit }) {
-  const T = useT();
-  const exportCsv = () => {
-    const rows = [["Timestamp", "Event Type", "Agent", "Description"],
-      ...audit.map(e => [e.ts, e.type, e.agent, e.desc])];
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    const a = document.createElement("a");
-    a.href = url; a.download = "argus-audit-trail.csv"; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <div>
-      <PageHeader title="Audit Trail" subtitle="Ledger of platform events and governance actions.">
-        <button onClick={exportCsv} style={{ display: "flex", alignItems: "center", gap: 8, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 8, padding: "9px 16px", fontSize: 14, cursor: "pointer" }}>
-          <Download size={15} /> Export CSV
-        </button>
-      </PageHeader>
-
-      {T.mobile ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
-          {audit.map((e, i) => (
-            <Card key={i} style={{ padding: "13px 14px", display: "flex", gap: 10 }}>
-              <div style={{ marginTop: 2 }}><SevDot sev={e.sev} size={15} /></div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
-                  <Pill small fg={T.text} bg={T.panelSoft} border={T.border}>{e.type}</Pill>
-                  <span style={{ fontWeight: 600, fontSize: 13.5 }}>{e.agent}</span>
-                </div>
-                <div style={{ fontSize: 13.5, lineHeight: 1.45 }}>{e.desc}</div>
-                <div style={{ color: T.faint, fontSize: 11.5, marginTop: 6, fontFamily: "ui-monospace, monospace" }}>{e.ts}</div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card style={{ marginTop: 20, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
-              <thead>
-                <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 13, textAlign: "left" }}>
-                  {["", "Timestamp", "Event Type", "Agent", "Description"].map((h, i) => (
-                    <th key={i} style={{ padding: "13px 16px", fontWeight: 600 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {audit.map((e, i) => (
-                  <tr key={i} style={{ borderTop: `1px solid ${T.border}` }}>
-                    <td style={{ padding: "13px 16px", width: 20 }}><SevDot sev={e.sev} /></td>
-                    <td style={{ padding: "13px 16px", fontFamily: "ui-monospace, monospace", fontSize: 13, color: T.dim, whiteSpace: "nowrap" }}>{e.ts}</td>
-                    <td style={{ padding: "13px 16px" }}><Pill fg={T.text} bg={T.panelSoft} border={T.border}>{e.type}</Pill></td>
-                    <td style={{ padding: "13px 16px", fontWeight: 600, fontSize: 14, whiteSpace: "nowrap" }}>{e.agent}</td>
-                    <td style={{ padding: "13px 16px", fontSize: 14, color: T.text }}>{e.desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
 
 /* ---------------- frameworks ---------------- */
 
@@ -2068,14 +2282,16 @@ function Heatmap({ agents, openAgent }) {
 
 /* ---------------- shared risk & control helpers ---------------- */
 
-const CONTROL_LABEL = { active: "In place", violated: "Violated", draft: "Draft", disabled: "Off", missing: "Not adopted" };
+const CONTROL_LABEL = { active: "Effective", violated: "Violated", draft: "Draft", disabled: "Off", missing: "Not adopted", untested: "Untested", stale: "Test stale", failed: "Failed test" };
 
 // Live status of any policy or recommended control, including violations by a given agent
 const controlStatus = (id, policies, audit = [], agentName) => {
   const p = policies.find(x => x.id === id);
   const tpl = RECOMMENDED_POLICIES.find(t => t.id === id);
   const violated = !!agentName && audit.some(e => e.agent === agentName && e.type === "Policy Violation" && e.policy === id);
-  const state = violated ? "violated" : !p ? "missing" : p.status === "draft" ? "draft" : !p.enabled ? "disabled" : "active";
+  const base = violated ? "violated" : !p ? "missing" : p.status === "draft" ? "draft" : !p.enabled ? "disabled" : "active";
+  const eff = base === "active" ? effectiveness(p).state : null;
+  const state = base === "active" && eff !== "effective" ? eff : base;
   return { id, name: p?.name ?? tpl?.name ?? id, state, template: tpl };
 };
 
@@ -2084,7 +2300,7 @@ function ControlPill({ c }) {
   const red = T.isDark ? "#f43f5e" : "#e11d48";
   const amber = T.isDark ? "#f59e0b" : "#b45309";
   const st = c.state === "active" ? { fg: T.blue, bg: T.blueSoft, border: T.blueBorder }
-    : c.state === "violated" ? { fg: red, bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.4)" : "rgba(225,29,72,.3)" }
+    : c.state === "violated" || c.state === "failed" ? { fg: red, bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.4)" : "rgba(225,29,72,.3)" }
     : { fg: amber, bg: "transparent", border: T.isDark ? "rgba(245,158,11,.4)" : "rgba(180,83,9,.35)" };
   return <Pill small fg={st.fg} bg={st.bg} border={st.border}>{c.name}{c.state === "active" ? "" : ` · ${CONTROL_LABEL[c.state]}`}</Pill>;
 }
@@ -2096,6 +2312,7 @@ function ControlAction({ c, actions, small = true }) {
   if (c.state === "missing" && c.template) return <button style={btn} onClick={() => actions.createPolicy(c.template.id)}><Plus size={12} /> Create from template</button>;
   if (c.state === "draft") return <button style={btn} onClick={() => actions.approve(c.id)}><BadgeCheck size={12} /> Approve</button>;
   if (c.state === "disabled") return <button style={btn} onClick={() => actions.togglePolicy(c.id)}>Enable policy</button>;
+  if (["untested", "stale", "failed"].includes(c.state) && actions.testPolicy) return <button style={btn} onClick={() => actions.testPolicy(c.id)}><BadgeCheck size={12} /> Record test</button>;
   return null;
 }
 
@@ -2118,7 +2335,6 @@ const GAP_STYLE = T => ({
 });
 const GapPill = ({ status }) => { const T = useT(); const s = GAP_STYLE(T)[status]; return <Pill small fg={s.fg} bg={s.bg} border={s.border}>{status}</Pill>; };
 
-const toCSV = rows => "﻿" + rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
 const downloadFile = (name, content, type) => {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const a = document.createElement("a");
@@ -2580,6 +2796,7 @@ function ArchitectureTab({ agent, policies, audit, actions }) {
         </Pill>
         <span style={{ fontSize: 12, color: T.faint }}>{arch.components.length} components · {arch.flows.length} data flows · {arch.workflow.filter(w => w.checkpoint).length} human checkpoints</span>
       </div>
+      <Provenance agent={agent} arch={arch} />
       <div style={{ fontSize: 13.5, lineHeight: 1.55, marginBottom: 14 }}>{arch.summary}</div>
 
       <div style={{ marginBottom: 14 }}>
@@ -2792,14 +3009,18 @@ function RequirementRow({ item, agent, policies, audit, actions, life, onShowTab
 
 function ApprovalPanel({ agent, req, life }) {
   const T = useT();
+  const { user } = useActor();
+  const [rev, setRev] = useState(agent.rev || 0);
   const [by, setBy] = useState("");
   const [due, setDue] = useState(addDays(60));
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const activation = req.kind === "activation";
   const maxDue = addDays(CONDITION_MAX_DAYS);
-  const byOk = by && by !== agent.owner;
+  const perm = can(user, "agent.approve", { agent, requester: agent.review?.byUser });
+  const byOk = by && by !== agent.owner && perm.ok;
   const dueOk = due && due <= maxDue && due > addDays(0);
+  const changed = (agent.rev || 0) !== rev;
   return (
     <div style={{ marginTop: 12, background: T.panel, border: `1px solid ${T.blueBorder}`, borderRadius: 10, padding: 13 }}>
       <div style={{ fontSize: 13.5, fontWeight: 700 }}>Approver decision</div>
@@ -2809,12 +3030,19 @@ function ApprovalPanel({ agent, req, life }) {
         {!activation && !req.done && " Reinstatement needs every item met first."}
       </div>
       <div style={{ marginTop: 10 }}>
-        <label style={labelStyle(T)}>Approved by</label>
-        <select value={by} onChange={e => setBy(e.target.value)} style={fieldStyle(T)}>
-          <option value="">Select approver…</option>
-          {POLICY_ROLES.map(r => <option key={r}>{r}</option>)}
+        <label htmlFor={`approve-${agent.id}`} style={labelStyle(T)}>Decide as (your role)</label>
+        <select id={`approve-${agent.id}`} value={by} onChange={e => setBy(e.target.value)} style={fieldStyle(T)}>
+          <option value="">Select role…</option>
+          {user.roles.map(r => <option key={r}>{r}</option>)}
         </select>
+        <NotAllowed action="agent.approve" ctx={{ agent, requester: agent.review?.byUser }} compact />
       </div>
+      {changed && (
+        <div role="alert" style={{ marginTop: 10, fontSize: 12.5, color: T.warnBox.fg, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 8, padding: "8px 11px" }}>
+          {agent.name} changed after you opened this decision. Check the requirements again.{" "}
+          <button onClick={() => setRev(agent.rev || 0)} style={{ background: "none", border: "none", color: T.blue, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 12.5 }}>I've reviewed the latest</button>
+        </div>
+      )}
       {activation && !req.done && (
         <div style={{ marginTop: 10 }}>
           <label style={labelStyle(T)}>Open items due by (max {CONDITION_MAX_DAYS} days)</label>
@@ -2825,15 +3053,15 @@ function ApprovalPanel({ agent, req, life }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
           <input autoFocus value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason for returning it to the owner (required)" style={fieldStyle(T)} />
           <div style={{ display: "flex", gap: 8 }}>
-            <button disabled={!byOk || !reason.trim()} onClick={() => life.decide(agent.id, { decision: "reject", by, reason: reason.trim() })} style={btnStyle(T, true, byOk && !!reason.trim())}>Return to owner</button>
+            <button disabled={!byOk || !reason.trim()} onClick={() => life.decide(agent.id, { decision: "reject", by, reason: reason.trim(), rev })} style={btnStyle(T, true, byOk && !!reason.trim())}>Return to owner</button>
             <button onClick={() => setRejecting(false)} style={btnStyle(T, false)}>Cancel</button>
           </div>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
           {req.done
-            ? <button disabled={!byOk} onClick={() => life.decide(agent.id, { decision: "approve", by })} style={btnStyle(T, true, byOk)}><BadgeCheck size={14} /> {activation ? "Approve activation" : "Approve reinstatement"}</button>
-            : activation && <button disabled={!byOk || !dueOk} onClick={() => life.decide(agent.id, { decision: "conditional", by, due })} style={btnStyle(T, true, byOk && dueOk)}><BadgeCheck size={14} /> Approve with conditions</button>}
+            ? <button disabled={!byOk} onClick={() => life.decide(agent.id, { decision: "approve", by, rev })} style={btnStyle(T, true, byOk)}><BadgeCheck size={14} /> {activation ? "Approve activation" : "Approve reinstatement"}</button>
+            : activation && <button disabled={!byOk || !dueOk} onClick={() => life.decide(agent.id, { decision: "conditional", by, due, rev })} style={btnStyle(T, true, byOk && dueOk)}><BadgeCheck size={14} /> Approve with conditions</button>}
           {!activation && !req.done && <button disabled style={btnStyle(T, true, false)}>Approve reinstatement</button>}
           <button onClick={() => setRejecting(true)} style={btnStyle(T, false)}>Return to owner</button>
         </div>
@@ -2910,6 +3138,7 @@ function LifecycleCard({ agent, policies, audit, treatments, gates, actions, lif
         <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>{req.met} of {req.total} met</span>
       </div>
 
+      {!agent.review && <NotAllowed action="agent.owner" ctx={{ agent }} why="The owner works this checklist." />}
       <div>
         {req.items.map(it => <RequirementRow key={it.id} item={it} agent={agent} policies={policies} audit={audit} actions={actions} life={life} onShowTab={onShowTab} />)}
       </div>
@@ -2918,7 +3147,7 @@ function LifecycleCard({ agent, policies, audit, treatments, gates, actions, lif
         {agent.review ? (
           <>
             <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-              <b>Submitted for {req.kind}</b> by {agent.review.by} (owner) on {agent.review.on}. Awaiting an approver.
+              <b>Submitted for {req.kind}</b> by {agent.review.byName || agent.review.by} for {agent.owner} on {agent.review.on}. Awaiting an independent approver.
               <button onClick={() => life.withdraw(agent.id)} style={{ marginLeft: 8, background: "none", border: "none", color: T.blue, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>Withdraw</button>
             </div>
             <ApprovalPanel agent={agent} req={req} life={life} />
@@ -3203,7 +3432,8 @@ function RiskScenarioDrawer({ entry, treatment, policies, audit, actions, onSave
   const [f, setF] = useState(() => ({ ...treatment, accBy: treatment.acceptance?.by || "", accReason: treatment.acceptance?.reason || "" }));
   const set = p => setF(s => ({ ...s, ...p }));
   const worst = [...entry.agents].sort((a, b) => b.residual.score - a.residual.score)[0];
-  const sameOwner = f.treatment === "Accept" && f.accBy && f.accBy === f.owner;
+  const { user: actor } = useActor();
+  const sameOwner = f.treatment === "Accept" && f.accBy && (f.accBy === f.owner || !can(actor, "risk.accept", { owner: f.owner, role: f.accBy }).ok);
   const valid = f.owner && f.reviewOn && (f.treatment !== "Accept" || (f.accReason.trim() && f.accBy && !sameOwner)) && (!["Transfer", "Avoid"].includes(f.treatment) || f.note.trim());
   const save = () => onSave(entry.id, {
     treatment: f.treatment, owner: f.owner, reviewOn: f.reviewOn, note: f.note.trim(),
@@ -3300,11 +3530,12 @@ function RiskScenarioDrawer({ entry, treatment, policies, audit, actions, onSave
                   style={{ ...fieldStyle(T), resize: "vertical", fontFamily: "inherit" }} />
               </div>
               <div>
-                <label style={labelStyle(T)}>Accepted by</label>
-                <select style={fieldStyle(T)} value={f.accBy} onChange={e => set({ accBy: e.target.value })}>
-                  <option value="">Select approver…</option>
-                  {POLICY_ROLES.map(r => <option key={r}>{r}</option>)}
+                <label htmlFor="accept-role" style={labelStyle(T)}>Accept as (your role)</label>
+                <select id="accept-role" style={fieldStyle(T)} value={f.accBy} onChange={e => set({ accBy: e.target.value })}>
+                  <option value="">Select role…</option>
+                  {actor.roles.filter(r => r !== f.owner).map(r => <option key={r}>{r}</option>)}
                 </select>
+                <NotAllowed action="risk.accept" ctx={{ owner: f.owner }} compact />
                 {sameOwner && <div style={{ color: T.warnBox.fg, fontSize: 12.5, marginTop: 6 }}>The approver should be independent of the risk owner.</div>}
               </div>
             </div>
@@ -3822,6 +4053,13 @@ export default function ArgusMVP() {
   const [toast, setToast] = useState(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [testing, setTesting] = useState(null);
+  // simulated identity: who is acting. Checks run in the browser only (see identity.js).
+  const [userId, setUserId] = useState(DEFAULT_USER.id);
+  const user = DEMO_USERS.find(u => u.id === userId) || DEFAULT_USER;
+  const userRef = useRef(user);
+  userRef.current = user;
+  const evSeq = useRef(SEED_AUDIT.length);
 
   const [treatments, setTreatments] = useState({});
   const [gates, setGates] = useState(DEFAULT_GATES);
@@ -3844,9 +4082,31 @@ export default function ArgusMVP() {
     setTimeout(() => setToast(null), 3500);
   };
 
+  // Append-only: events are only ever added, sealed into the checksum chain, and free text is redacted first
   const log = (sev, type, agent, desc, extra = {}) => {
     const at = Date.now();
-    setAudit(ev => [{ sev, at, ts: fmtWhenLong(at), type, agent, desc, ...extra }, ...ev]);
+    const u = userRef.current;
+    const { role, actor, ...rest } = extra;
+    const eid = `EVT-${String(++evSeq.current).padStart(4, "0")}`;
+    const ev = { eid, sev, at, ts: fmtWhenLong(at), type, agent, desc: redact(desc), outcome: "success", ...rest,
+      actor: actor || { name: u.name, role: role || u.roles[0] || "Agent owner" } };
+    setAudit(list => [seal(ev, list), ...list]);
+  };
+  const denied = (label, reason, agent = "—") => {
+    notify(reason);
+    log("warn", "Action Denied", agent || "—", `${label} denied for ${userRef.current.name}: ${reason}`, { outcome: "denied" });
+  };
+  // the browser-side stand-in for a server authorization check
+  const allowed = (action, ctx, label, agent) => {
+    const r = can(userRef.current, action, ctx);
+    if (!r.ok) denied(label, r.reason, agent);
+    return r.ok;
+  };
+  const actAs = id => {
+    const u = DEMO_USERS.find(x => x.id === id);
+    if (!u || u.id === userRef.current.id) return;
+    setUserId(id);
+    notify(`Now acting as ${u.name} (simulated)`);
   };
 
   const resetDemo = () => {
@@ -3858,6 +4118,8 @@ export default function ArgusMVP() {
     setRiskFocus(null);
     setGates(DEFAULT_GATES);
     setGapOverrides({});
+    evSeq.current = SEED_AUDIT.length;
+    setTesting(null);
     setDetailId(null);
     setFwOpen(null);
     setModal(null);
@@ -3867,18 +4129,20 @@ export default function ArgusMVP() {
 
   const togglePolicy = id => {
     const p = policies.find(x => x.id === id);
+    if (!allowed("policy.manage", {}, p?.enabled ? "Disabling a policy" : "Enabling a policy")) return;
     setPolicies(ps => ps.map(x => x.id === id ? { ...x, enabled: !x.enabled } : x));
-    if (p) log("info", "Policy Change", "—", `Policy "${p.name}" ${p.enabled ? "disabled" : "enabled"}`);
+    if (p) log("info", "Policy Change", "—", `Policy "${p.name}" ${p.enabled ? "disabled" : "enabled"}`, { entity: { kind: "policy", id, version: p.version || 1 }, before: { enabled: p.enabled }, after: { enabled: !p.enabled } });
   };
 
   const linkPolicy = (key, policyId) => {
+    if (!allowed("policy.manage", {}, "Control mapping")) return;
     setReqMap(m => ({ ...m, [key]: [...(m[key] || []), policyId] }));
     const [fwId, idx] = key.split("|");
     const fw = FRAMEWORKS.find(f => f.id === fwId);
     const req = fw?.requirements[Number(idx)];
     const p = policies.find(x => x.id === policyId);
     if (fw && req && p) {
-      log("info", "Control Mapped", "—", `"${p.name}" mapped to ${fw.short} ${req.id} (${req.title})`);
+      log("info", "Control Mapped", "—", `"${p.name}" mapped to ${fw.short} ${req.id} (${req.title})`, { entity: { kind: "mapping", id: key }, after: { policy: policyId } });
       notify(`Mapped to ${fw.short} ${req.id}`);
     }
   };
@@ -3887,6 +4151,7 @@ export default function ArgusMVP() {
 
   // From a recommendation: approve a draft, re-enable a disabled policy, or open the form pre-filled from the template
   const adoptRecommendation = tpl => {
+    if (!allowed("policy.manage", {}, "Adopting a recommended control")) return;
     const existing = policies.find(p => p.id === tpl.id);
     if (!existing) return openCreatePolicy(tpl.id);
     if (existing.status === "draft") return setApproving(existing.id);
@@ -3907,9 +4172,14 @@ export default function ArgusMVP() {
     const tpl = RECOMMENDED_POLICIES.find(t => t.id === (p.templateId || p.id));
     const keys = Object.entries(reqMap).filter(([, refs]) => refs.includes(id)).map(([k]) => k);
     const closing = keys.filter(k => gapKeys.has(k));
-    setPolicies(ps => ps.map(x => x.id === id ? { ...x, status: "approved", approvedBy: a.approvedBy, approvedOn: a.approvedOn, doc: a.doc || x.doc } : x));
-    if (a.doc && a.doc !== p.doc) log("info", "Document Uploaded", "—", `"${a.doc.name}" attached to policy "${p.name}"`);
-    log("info", "Policy Approved", "—", `Policy "${p.name}" approved by ${a.approvedBy} on ${a.approvedOn}${closing.length ? `; closes ${closing.map(reqLabel).join(", ")}` : ""}`);
+    if (!allowed("policy.approve", { role: a.approvedBy, owner: p.owner, requester: p.revisedBy || p.createdBy }, `Approval of "${p.name}"`)) return;
+    const v = p.version || 1;
+    const u = userRef.current;
+    const doc = a.doc && a.doc !== p.doc ? { ...a.doc, version: v } : p.doc;
+    setPolicies(ps => ps.map(x => x.id === id ? { ...x, status: "approved", approvedBy: a.approvedBy, approvedOn: a.approvedOn, approvedVersion: v, approvedByUser: u.id, approvalSource: "argus", doc } : x));
+    if (a.doc && a.doc !== p.doc) log("info", "Document Uploaded", "—", `"${a.doc.name}" (v${v}, ${fmtSize(a.doc.size)}, SHA-256 ${a.doc.sha256?.slice(0, 12)}…) attached to policy "${p.name}"`, { entity: { kind: "policy", id, version: v } });
+    log("info", "Policy Approved", "—", `${u.name} (${a.approvedBy}) approved version ${v} of "${p.name}" on ${a.approvedOn}${closing.length ? `; closes ${closing.map(reqLabel).join(", ")}` : ""}`,
+      { role: a.approvedBy, entity: { kind: "policy", id, version: v }, before: { status: p.status }, after: { status: "approved", version: v } });
     setApproving(null);
     notify(closing.length ? `Approved. Closed ${closing.length} gap${closing.length === 1 ? "" : "s"}.` : `Policy approved by ${a.approvedBy}`);
   };
@@ -3919,109 +4189,165 @@ export default function ArgusMVP() {
     if (a) setDetailId(a.id);
   };
 
-  const updateAgent = (id, patch) => setAgents(as => as.map(a => a.id === id ? { ...a, ...(typeof patch === "function" ? patch(a) : patch) } : a));
+  const updateAgent = (id, patch) => setAgents(as => as.map(a => a.id === id ? { ...a, ...(typeof patch === "function" ? patch(a) : patch), rev: (a.rev || 0) + 1 } : a));
   const today = () => localISO();
 
-  // Agent lifecycle: owner works the requirements and submits; an independent approver decides
+  // Agent lifecycle: owner works the requirements and submits; an independent approver decides.
+  // Every command is validated first (who, state, and whether the record changed since it was opened).
+  const ctxNow = { audit, treatments, gates };
+  const command = (id, cmd, label) => {
+    const a = scored.find(x => x.id === id);
+    const r = checkCommand(a, cmd, userRef.current, ctxNow);
+    if (!r.ok) denied(label, r.reason, a?.name);
+    return r.ok ? a : null;
+  };
+  const agentEntity = a => ({ kind: "agent", id: a.name, version: a.rev || 0 });
   const life = {
     attest: (id, key) => {
-      const a = agents.find(x => x.id === id);
-      updateAgent(id, x => ({ attest: { ...(x.attest || {}), [key]: { by: x.owner, on: today() } } }));
-      log("info", "Owner Attestation", a.name, `${a.owner} confirmed ${a.name}'s ${key === "arch" ? "architecture" : "characteristics"} are accurate`);
+      const a = command(id, { type: "attest" }, "Owner attestation"); if (!a) return;
+      const u = userRef.current;
+      updateAgent(id, x => ({ attest: { ...(x.attest || {}), [key]: { by: u.name, on: today() } } }));
+      log("info", "Owner Attestation", a.name, `${u.name} (owner, ${a.owner}) confirmed ${a.name}'s ${key === "arch" ? "architecture" : "characteristics"} are accurate`, { role: "Agent owner", entity: agentEntity(a) });
     },
     rootCause: (id, vid, v) => {
-      const a = agents.find(x => x.id === id);
-      updateAgent(id, x => ({ resolutions: { ...(x.resolutions || {}), [vid]: { ...v, by: x.owner, on: today() } } }));
-      log("info", "Root Cause Recorded", a.name, `Root cause recorded for ${a.name} violation ${vid}: ${v.cause}. Fix: ${v.fix}`);
+      const a = command(id, { type: "rootCause" }, "Root cause"); if (!a) return;
+      const clean = { cause: redact(v.cause), fix: redact(v.fix) };
+      updateAgent(id, x => ({ resolutions: { ...(x.resolutions || {}), [vid]: { ...clean, by: userRef.current.name, on: today() } } }));
+      log("info", "Root Cause Recorded", a.name, `Root cause recorded for ${a.name} violation ${vid}: ${clean.cause}. Fix: ${clean.fix}`, { role: "Agent owner", entity: agentEntity(a) });
     },
     retest: (id, pid, evidence) => {
-      const a = agents.find(x => x.id === id);
+      const a = command(id, { type: "retest" }, "Control re-test"); if (!a) return;
       const p = policies.find(x => x.id === pid);
-      updateAgent(id, x => ({ retests: { ...(x.retests || {}), [pid]: { evidence, by: x.owner, on: today() } } }));
-      log("info", "Control Re-tested", a.name, `"${p?.name}" re-tested against ${a.name}: ${evidence}`);
+      const u = userRef.current;
+      const ev = redact(evidence);
+      updateAgent(id, x => ({ retests: { ...(x.retests || {}), [pid]: { evidence: ev, by: u.name, on: today() } } }));
+      // the re-test is also control evidence, scoped to this agent and bound to the policy version
+      if (p) setPolicies(ps => ps.map(x => x.id === pid ? { ...x, tests: [...(x.tests || []), newTest({ policy: x, result: "pass", evidence: ev, owner: `${a.owner} (agent owner)`, by: u.name, scope: [a.id] })] } : x));
+      log("info", "Control Re-tested", a.name, `"${p?.name}" re-tested against ${a.name} and passed: ${ev}`, { role: "Agent owner", entity: { kind: "policy", id: pid, version: p?.version || 1 }, after: { result: "pass", scope: a.name } });
       notify(`${p?.name} re-tested`);
     },
     autonomy: (id, level) => {
-      const a = agents.find(x => x.id === id);
+      const a = command(id, { type: "autonomy" }, "Autonomy change"); if (!a) return;
       updateAgent(id, { autonomy: level });
-      log("info", "Autonomy Change", a.name, `${a.name} autonomy reduced from ${a.autonomy.toLowerCase()} to ${level.toLowerCase()}`);
+      log("info", "Autonomy Change", a.name, `${a.name} autonomy reduced from ${a.autonomy.toLowerCase()} to ${level.toLowerCase()}`, { role: "Agent owner", entity: agentEntity(a), before: { autonomy: a.autonomy }, after: { autonomy: level } });
       notify(`${a.name} is now ${level.toLowerCase()}`);
     },
     submit: (id, kind) => {
-      const a = scored.find(x => x.id === id);
-      const r = requirements(a, kind, { audit, treatments, gates });
-      updateAgent(id, { review: { kind, by: a.owner, on: today(), at: Date.now() } });
+      const a = command(id, { type: "submit" }, `Submission for ${kind}`); if (!a) return;
+      const r = requirements(a, kind, ctxNow);
+      const u = userRef.current;
+      const correlation = `SUB-${Date.now().toString(36).toUpperCase()}`;
+      updateAgent(id, { review: { kind, by: a.owner, byUser: u.id, byName: u.name, on: today(), at: Date.now(), correlation } });
       log("info", kind === "activation" ? "Submitted for Activation" : "Submitted for Reinstatement", a.name,
-        `${a.owner} submitted ${a.name} for ${kind} with ${r.met} of ${r.total} requirements met`);
+        `${u.name} submitted ${a.name} for ${kind} with ${r.met} of ${r.total} requirements met`, { role: "Agent owner", entity: agentEntity(a), correlation, after: { review: kind } });
       notify("Submitted for approval");
     },
     withdraw: id => {
-      const a = agents.find(x => x.id === id);
+      const a = command(id, { type: "withdraw" }, "Withdrawal"); if (!a) return;
       updateAgent(id, { review: null });
-      log("info", "Submission Withdrawn", a.name, `${a.owner} withdrew ${a.name}'s submission`);
+      log("info", "Submission Withdrawn", a.name, `${userRef.current.name} withdrew ${a.name}'s submission`, { role: "Agent owner", entity: agentEntity(a), correlation: a.review?.correlation });
     },
     decide: (id, dec) => {
-      const a = scored.find(x => x.id === id);
-      const kind = a.status === "pending" ? "activation" : "reinstatement";
+      const kind0 = scored.find(x => x.id === id)?.status === "pending" ? "activation" : "reinstatement";
+      const a = command(id, { type: "decide", ...dec }, `${kind0[0].toUpperCase() + kind0.slice(1)} decision`); if (!a) return;
+      const kind = kind0;
+      const u = userRef.current;
+      const meta = { role: dec.by, entity: agentEntity(a), correlation: a.review?.correlation };
+      // apply only if nothing changed between the check and the write (two approvers deciding at once)
+      const guarded = patch => setAgents(as => as.map(x => x.id === id && (x.rev || 0) === (a.rev || 0) && x.review ? { ...x, ...patch, rev: (x.rev || 0) + 1 } : x));
+      const stamp = { by: dec.by, byUser: u.id, byName: u.name, on: today(), rev: a.rev || 0 };
       if (dec.decision === "reject") {
-        updateAgent(id, { review: null, lastDecision: { decision: "reject", by: dec.by, reason: dec.reason, on: today() } });
-        log("warn", kind === "activation" ? "Activation Returned" : "Reinstatement Returned", a.name, `${dec.by} returned ${a.name} to its owner: ${dec.reason}`);
+        const reason = redact(dec.reason);
+        guarded({ review: null, lastDecision: { decision: "reject", reason, ...stamp } });
+        log("warn", kind === "activation" ? "Activation Returned" : "Reinstatement Returned", a.name, `${u.name} (${dec.by}) returned ${a.name} to its owner: ${reason}`, { ...meta, before: { review: kind }, after: { review: null } });
         notify("Returned to owner");
         return;
       }
       if (kind === "activation") {
-        const r = requirements(a, "activation", { audit, treatments, gates });
+        const r = requirements(a, "activation", ctxNow);
         const conditional = dec.decision === "conditional";
-        updateAgent(id, {
-          status: "active", review: null, lastDecision: { decision: dec.decision, by: dec.by, on: today() },
+        guarded({
+          status: "active", review: null, lastDecision: { decision: dec.decision, ...stamp },
           conditions: conditional ? { items: r.open.map(i => i.id), due: dec.due, by: dec.by, on: today() } : null,
         });
         log("info", conditional ? "Agent Conditionally Activated" : "Agent Activated", a.name, conditional
-          ? `${dec.by} activated ${a.name} with conditions. Open items due ${dec.due}: ${r.open.map(i => i.label.replace(/ \(.*\)$/, "").toLowerCase()).join("; ")}`
-          : `${dec.by} activated ${a.name} with all requirements met`);
+          ? `${u.name} (${dec.by}) activated ${a.name} with conditions. Open items due ${dec.due}: ${r.open.map(i => i.label.replace(/ \(.*\)$/, "").toLowerCase()).join("; ")}`
+          : `${u.name} (${dec.by}) activated ${a.name} with all requirements met`, { ...meta, before: { status: "pending" }, after: { status: "active", conditional } });
         notify(`${a.name} activated${conditional ? " with conditions" : ""}`);
       } else {
-        updateAgent(id, {
-          status: "active", review: null, lastDecision: { decision: "approve", by: dec.by, on: today() },
+        guarded({
+          status: "active", review: null, lastDecision: { decision: "approve", ...stamp },
           pastSuspension: a.suspension, suspension: null,
           probation: { until: addDays(PROBATION_DAYS), by: dec.by, on: today() },
         });
-        log("info", "Agent Reinstated", a.name, `${dec.by} reinstated ${a.name} with all remediation complete. On probation until ${addDays(PROBATION_DAYS)}`);
+        log("info", "Agent Reinstated", a.name, `${u.name} (${dec.by}) reinstated ${a.name} with all remediation complete. On probation until ${addDays(PROBATION_DAYS)}`, { ...meta, before: { status: "suspended" }, after: { status: "active", probationUntil: addDays(PROBATION_DAYS) } });
         notify(`${a.name} reinstated on ${PROBATION_DAYS}-day probation`);
       }
     },
     openRisk: sid => { setDetailId(null); setView("assessments"); setNavOpen(false); setRiskFocus(sid); },
     grantException: (id, ex) => {
-      const a = agents.find(x => x.id === id);
-      updateAgent(id, { exception: { ...ex, on: today(), at: Date.now() } });
-      log("warn", "Gate Exception Approved", a.name, `${ex.by} approved an exception for ${a.name} until ${ex.until} covering ${ex.gates.join(", ")}: ${ex.reason}`);
+      const a = command(id, { type: "grantException", ...ex }, "Gate exception"); if (!a) return;
+      const u = userRef.current;
+      const reason = redact(ex.reason);
+      updateAgent(id, { exception: { ...ex, reason, byUser: u.id, byName: u.name, on: today(), at: Date.now() } });
+      log("warn", "Gate Exception Approved", a.name, `${u.name} (${ex.by}) approved an exception for ${a.name} until ${ex.until} covering ${ex.gates.join(", ")}: ${reason}`, { role: ex.by, entity: agentEntity(a), after: { exceptionUntil: ex.until } });
       notify(`Exception approved until ${ex.until}`);
     },
     revokeException: id => {
-      const a = agents.find(x => x.id === id);
+      const a = command(id, { type: "revokeException" }, "Exception revocation"); if (!a) return;
       updateAgent(id, { exception: null });
-      log("info", "Gate Exception Revoked", a.name, `Exception for ${a.name} revoked`);
+      log("info", "Gate Exception Revoked", a.name, `${userRef.current.name} revoked the exception for ${a.name}`, { entity: agentEntity(a), before: { exceptionUntil: a.exception.until }, after: { exceptionUntil: null } });
     },
     suspend: (id, d) => {
-      const a = agents.find(x => x.id === id);
+      const a = command(id, { type: "suspend", ...d }, "Suspension"); if (!a) return;
       const at = Date.now();
+      const u = userRef.current;
+      const reason = redact(d.reason);
       updateAgent(id, { status: "suspended", exception: null, conditions: null, probation: null, review: null,
-        suspension: { on: fmtWhen(at), at, by: d.by, reason: d.reason, autonomy: a.autonomy } });
-      log("critical", "Agent Suspended", a.name, `${a.name} suspended by ${d.by}: ${d.reason}`);
+        suspension: { on: fmtWhen(at), at, by: `${u.name} (${d.by})`, reason, autonomy: a.autonomy } });
+      log("critical", "Agent Suspended", a.name, `${u.name} (${d.by}) suspended ${a.name}: ${reason}`, { role: d.by, entity: agentEntity(a), before: { status: "active" }, after: { status: "suspended" } });
       notify(`${a.name} suspended`);
     },
     reviewPolicy: pid => {
       const p = policies.find(x => x.id === pid);
+      if (!allowed("policy.manage", {}, "Policy review")) return;
       setPolicies(ps => ps.map(x => x.id === pid ? { ...x, reviewedOn: today() } : x));
-      log("info", "Policy Reviewed", "—", `Annual review of "${p.name}" recorded; next review due in 12 months`);
+      log("info", "Policy Reviewed", "—", `Annual review of "${p.name}" recorded; next review due in 12 months`, { entity: { kind: "policy", id: pid, version: p.version || 1 } });
       notify("Policy review recorded");
     },
     setGates: patch => {
+      if (!allowed("gates.configure", {}, "Gate configuration")) return;
       setGates(g => ({ ...g, ...patch }));
-      log("warn", "Gate Configuration Changed", "—", `Operating gates changed: ${Object.entries(patch).map(([k, v]) => `${k} = ${v}`).join(", ")}`);
+      log("warn", "Gate Configuration Changed", "—", `Operating gates changed: ${Object.entries(patch).map(([k, v]) => `${k} = ${v}`).join(", ")}`, { role: "AI Governance Committee", entity: { kind: "config", id: "operating-gates" }, before: Object.fromEntries(Object.keys(patch).map(k => [k, gates[k]])), after: patch });
       notify("Operating gates updated");
     },
   };
+
+  // Control testing and versioning
+  const recordTest = (pid, t) => {
+    const p = policies.find(x => x.id === pid);
+    if (!p || !allowed("policy.manage", { role: t.owner }, "Control test")) return;
+    const u = userRef.current;
+    const test = newTest({ policy: p, result: t.result, evidence: redact(t.evidence), owner: t.owner, by: u.name, testedOn: t.testedOn, scope: t.scope, validDays: t.validDays });
+    setPolicies(ps => ps.map(x => x.id === pid ? { ...x, tests: [...(x.tests || []), test] } : x));
+    const scopeTxt = t.scope === "all" ? "all agents in scope" : agents.filter(a => t.scope.includes(a.id)).map(a => a.name).join(", ");
+    log(t.result === "pass" ? "info" : "warn", t.result === "pass" ? "Control Test Passed" : "Control Test Failed", "—",
+      `"${p.name}" v${p.version || 1} ${t.result === "pass" ? "passed" : "failed"} a test on ${t.testedOn} (${scopeTxt}): ${test.evidence}`,
+      { role: t.owner, entity: { kind: "policy", id: pid, version: p.version || 1 }, after: { result: t.result, expiresOn: test.expiresOn } });
+    setTesting(null);
+    notify(t.result === "pass" ? `Test recorded. ${p.name} is verified effective until ${test.expiresOn}.` : `Failed test recorded. ${p.name} no longer counts as effective.`);
+  };
+  const revisePolicy = (pid, summary) => {
+    const p = policies.find(x => x.id === pid);
+    if (!p || !allowed("policy.manage", {}, "New policy version")) return;
+    const u = userRef.current;
+    const v = (p.version || 1) + 1;
+    setPolicies(ps => ps.map(x => x.id === pid ? { ...x, version: v, status: "draft", revision: redact(summary), revisedBy: u.id, approvedBy: null, approvedOn: null, approvalSource: null } : x));
+    log("warn", "Policy Revised", "—", `"${p.name}" revised to version ${v} by ${u.name}: ${redact(summary)}. Back to draft until approved; tests on version ${p.version || 1} are now stale.`,
+      { entity: { kind: "policy", id: pid, version: v }, before: { version: p.version || 1, status: p.status }, after: { version: v, status: "draft" } });
+    notify(`Version ${v} drafted. It needs an independent approval and a new test.`);
+  };
+  const openPolicy = pid => { go("policy"); setTimeout(() => document.getElementById(`policy-${pid}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80); };
 
   const runDecision = act => {
     if (act.type === "agent") { setDetailId(act.id); return; }
@@ -4030,11 +4356,16 @@ export default function ArgusMVP() {
     if (act.type === "enable") { togglePolicy(act.id); return; }
     if (act.type === "approve") { setApproving(act.id); return; }
     if (act.type === "review") life.reviewPolicy(act.id);
+    if (act.type === "test") setTesting(act.id);
   };
 
   const updateTraits = (id, traits) => {
     const a = agents.find(x => x.id === id);
-    updateAgent(id, { traits });
+    const u = userRef.current;
+    if (!ownsAgent(u, a) && !allowed("scope.change", {}, "Changing characteristics", a.name)) return;
+    // characteristics drive scope, so a change invalidates the owner's earlier confirmations
+    updateAgent(id, { traits, ...(a.attest ? { attest: null } : {}) });
+    if (a.attest) log("warn", "Assessment Invalidated", a.name, `${a.name}'s characteristics changed, so the owner's architecture and characteristics confirmations were cleared and must be redone`, { entity: { kind: "agent", id: a.name, version: (a.rev || 0) + 1 } });
     const before = new Set(Object.keys(a.traits || {}).filter(k => a.traits[k]));
     const after = new Set(Object.keys(traits).filter(k => traits[k]));
     const added = [...after].filter(k => !before.has(k)), removed = [...before].filter(k => !after.has(k));
@@ -4045,6 +4376,8 @@ export default function ArgusMVP() {
 
   const excludeMapping = (id, key, reason) => {
     const a = agents.find(x => x.id === id);
+    if (!allowed("scope.change", {}, "Scope exclusion", a.name)) return;
+    reason = redact(reason);
     const m = mapAgent(a, policies);
     const item = [...m.frameworks, ...m.policies].find(x => x.key === key);
     updateAgent(id, { exclusions: { ...(a.exclusions || {}), [key]: { reason, on: localISO() } } });
@@ -4054,6 +4387,7 @@ export default function ArgusMVP() {
 
   const includeMapping = (id, key) => {
     const a = agents.find(x => x.id === id);
+    if (!allowed("scope.change", {}, "Returning an item to scope", a.name)) return;
     const m = mapAgent(a, policies);
     const item = [...m.frameworks, ...m.policies].find(x => x.key === key);
     const { [key]: _, ...rest } = a.exclusions || {};
@@ -4062,28 +4396,32 @@ export default function ArgusMVP() {
   };
 
   const registerAgent = f => {
+    if (!allowed("agent.register", {}, "Agent registration")) return;
     const fullAuto = f.autonomy === "Full autonomy";
     const newAgent = {
       id: Date.now(), name: f.name.trim(), model: f.model, dept: f.dept,
       status: "pending", risk: fullAuto ? "MEDIUM" : "LOW",
       score: fullAuto ? 40 : 15, autonomy: f.autonomy, owner: f.owner.trim(),
-      desc: f.desc.trim(), traits: f.traits, exclusions: {},
+      desc: f.desc.trim(), traits: f.traits, exclusions: {}, rev: 0,
     };
     setAgents(a => [...a, newAgent]);
-    log("info", "Agent Registered", newAgent.name, `${newAgent.name} registered and pending security review before activation`);
+    log("info", "Agent Registered", newAgent.name, `${newAgent.name} registered and pending security review before activation`, { entity: { kind: "agent", id: newAgent.name, version: 0 }, after: { status: "pending", owner: newAgent.owner } });
     setModal(null);
     notify(`${newAgent.name} registered — pending security review`);
   };
 
   const createPolicy = f => {
+    if (!allowed("policy.manage", {}, "Policy creation")) return;
+    const u = userRef.current;
     const tpl = RECOMMENDED_POLICIES.find(t => t.id === f.templateId);
     const id = tpl && !policies.some(p => p.id === tpl.id) ? tpl.id : `p${Date.now()}`;
     const approved = f.approved;
     const newPolicy = {
       id, tag: f.tag, name: f.name.trim(), desc: f.desc.trim(), action: f.action, violations: 0, enabled: true,
       frameworks: tpl ? [] : f.frameworks, owner: f.owner, templateId: tpl?.id, evidence: tpl?.evidence, doc: f.doc,
-      status: approved ? "approved" : "draft",
-      ...(approved ? { approvedBy: f.approvedBy, approvedOn: f.approvedOn } : {}),
+      status: approved ? "approved" : "draft", version: 1, createdBy: u.id, tests: [],
+      doc: f.doc ? { ...f.doc, version: 1 } : null,
+      ...(approved ? { approvedBy: f.approvedBy, approvedOn: f.approvedOn, approvedVersion: 1, approvalSource: "recorded" } : {}),
     };
     setPolicies(ps => [...ps, newPolicy]);
     // a template carries its requirement mapping with it
@@ -4093,9 +4431,10 @@ export default function ArgusMVP() {
       return next;
     });
     const closing = tpl ? tpl.closeKeys.filter(k => gapKeys.has(k)) : [];
-    log("info", "Policy Created", "—", `Policy "${newPolicy.name}" created as ${approved ? "approved" : "draft"} (owner: ${f.owner}, action: ${f.action})${tpl ? `; mapped to ${tpl.closeKeys.map(reqLabel).join(", ")}` : ""}`);
-    if (f.doc) log("info", "Document Uploaded", "—", `"${f.doc.name}" attached to policy "${newPolicy.name}"`);
-    if (approved) log("info", "Policy Approved", "—", `Policy "${newPolicy.name}" approved by ${f.approvedBy} on ${f.approvedOn}`);
+    const pe = { kind: "policy", id, version: 1 };
+    log("info", "Policy Created", "—", `Policy "${newPolicy.name}" created as ${approved ? "approved" : "draft"} (owner: ${f.owner}, action: ${f.action})${tpl ? `; mapped to ${tpl.closeKeys.map(reqLabel).join(", ")}` : ""}`, { entity: pe, after: { status: newPolicy.status } });
+    if (f.doc) log("info", "Document Uploaded", "—", `"${f.doc.name}" (${fmtSize(f.doc.size)}, SHA-256 ${f.doc.sha256?.slice(0, 12)}…) attached to policy "${newPolicy.name}"`, { entity: pe });
+    if (approved) log("info", "Approval Recorded", "—", `${u.name} recorded that ${f.approvedBy} approved "${newPolicy.name}" outside ARGUS on ${f.approvedOn}, with the signed document as evidence`, { entity: pe, after: { status: "approved", source: "outside ARGUS" } });
     setModal(null);
     setPolicyTemplate(null);
     notify(approved
@@ -4103,13 +4442,16 @@ export default function ArgusMVP() {
       : `Saved as draft.${closing.length ? ` Approve it to close ${closing.length} gap${closing.length === 1 ? "" : "s"}.` : ""}`);
   };
 
-  const actions = { createPolicy: openCreatePolicy, approve: setApproving, togglePolicy };
+  const actions = { createPolicy: openCreatePolicy, approve: setApproving, togglePolicy, testPolicy: setTesting };
 
   const saveTreatment = (sid, t) => {
     const sc = register.find(x => x.id === sid);
+    if (!allowed("risk.treat", {}, `Treatment of ${sid}`)) return;
+    if (t.treatment === "Accept" && !allowed("risk.accept", { owner: t.owner, role: t.acceptance.by }, `Acceptance of ${sid}`)) return;
+    if (t.acceptance) t = { ...t, acceptance: { ...t.acceptance, reason: redact(t.acceptance.reason), byUser: userRef.current.id, byName: userRef.current.name } };
     setTreatments(m => ({ ...m, [sid]: t }));
     if (t.treatment === "Accept") {
-      log("warn", "Risk Accepted", "—", `${sid} ${sc?.title}: residual risk ${sc?.residual.score} accepted by ${t.acceptance.by} (owner: ${t.owner}, review ${t.reviewOn}). Justification: ${t.acceptance.reason}`);
+      log("warn", "Risk Accepted", "—", `${sid} ${sc?.title}: residual risk ${sc?.residual.score} accepted by ${userRef.current.name} (${t.acceptance.by}) (owner: ${t.owner}, review ${t.reviewOn}). Justification: ${t.acceptance.reason}`, { role: t.acceptance.by, entity: { kind: "risk", id: sid }, after: { treatment: "Accept" } });
     } else {
       log("info", "Risk Treatment", "—", `${sid} ${sc?.title}: treatment set to ${t.treatment} (owner: ${t.owner}, review ${t.reviewOn})${t.note ? `. ${t.note}` : ""}`);
     }
@@ -4117,6 +4459,7 @@ export default function ArgusMVP() {
   };
 
   const setGapField = (key, field, value) => {
+    if (!allowed("risk.treat", {}, "Remediation assignment")) return;
     setGapOverrides(o => ({ ...o, [key]: { ...(o[key] || {}), [field]: value } }));
     if (field === "owner" && value) {
       const [fwId, i] = key.split("|");
@@ -4126,6 +4469,8 @@ export default function ArgusMVP() {
   };
 
   const markNA = (key, reason) => {
+    if (!allowed("scope.change", {}, "Not-applicable marking")) return;
+    if (reason) reason = redact(reason);
     const [fwId, i] = key.split("|");
     const fw = FRAMEWORKS.find(f => f.id === fwId);
     const label = `${fw.short} ${fw.requirements[Number(i)].id}`;
@@ -4178,13 +4523,7 @@ export default function ArgusMVP() {
           </button>
         ))}
       </nav>
-      <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 12, padding: "14px 8px 0", borderTop: `1px solid ${T.border}` }}>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", background: T.avatarBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: T.blue }}>OP</div>
-        <div>
-          <div style={{ fontSize: 13.5, fontWeight: 600 }}>Ops Admin</div>
-          <div style={{ color: T.faint, fontSize: 12 }}>Level 4 Clearance</div>
-        </div>
-      </div>
+      <IdentitySwitcher />
     </aside>
   );
 
@@ -4192,6 +4531,7 @@ export default function ArgusMVP() {
 
   return (
     <ThemeCtx.Provider value={T}>
+     <ActorCtx.Provider value={{ user, actAs }}>
       <div style={{
         display: "flex", minHeight: "100vh", background: T.bg, color: T.text,
         fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif",
@@ -4277,9 +4617,10 @@ export default function ArgusMVP() {
               openAgent={openAgent} onOpenFrameworks={() => go("frameworks")} onOpenDecisions={() => go("decisions")} />}
             {view === "decisions" && <Decisions items={decisions} gates={gates} onGates={life.setGates} onAction={runDecision} />}
             {view === "registry" && <Registry agents={scored} policies={policies} audit={audit} treatments={treatments} gates={gates} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
-            {view === "policy" && <PolicyEngine policies={policies} reqMap={reqMap} toggle={togglePolicy} onOpenCreate={() => openCreatePolicy()} onApprove={setApproving} />}
+            {view === "policy" && <PolicyEngine policies={policies} reqMap={reqMap} toggle={togglePolicy} onOpenCreate={() => openCreatePolicy()} onApprove={setApproving}
+              agents={scored} onTest={recordTest} onRevise={revisePolicy} />}
             {view === "frameworks" && <Frameworks assessment={assessment} gapKeys={gapKeys} policies={policies} onOpen={setFwOpen} onAdopt={adoptRecommendation} />}
-            {view === "audit" && <AuditTrail audit={audit} />}
+            {view === "audit" && <AuditTrail audit={audit} agents={scored} policies={policies} onOpenAgent={openAgent} onOpenPolicy={openPolicy} notify={notify} />}
             {view === "heatmap" && <Heatmap agents={scored} openAgent={openAgent} />}
             {view === "assessments" && <Assessments scored={scored} register={register} assessment={assessment} policies={policies} audit={audit} treatments={treatments}
               actions={actions} onSaveTreatment={saveTreatment} onGapField={setGapField} onMarkNA={markNA} onOpenAgent={openAgent}
@@ -4292,6 +4633,12 @@ export default function ArgusMVP() {
           initialTemplate={policyTemplate} policies={policies} />}
         {approving && policies.find(p => p.id === approving) && (
           <ApprovePolicyModal policy={policies.find(p => p.id === approving)} onClose={() => setApproving(null)} onApprove={approvePolicy} />
+        )}
+        {testing && policies.find(p => p.id === testing) && (
+          <Modal title="Record a control test" subtitle={`${policies.find(p => p.id === testing).name}. Only a current, passing test makes a control count as effective.`} onClose={() => setTesting(null)}>
+            <TestForm policy={policies.find(p => p.id === testing)} agents={scored.filter(a => a.mapping.policies.some(m => m.id === testing && !m.excluded))} onCancel={() => setTesting(null)} onSave={t => recordTest(testing, t)} />
+            <NotAllowed action="policy.manage" />
+          </Modal>
         )}
         <AgentDrawer key={detailId ?? "none"} agent={scored.find(a => a.id === detailId)} audit={audit} policies={policies} actions={actions}
           treatments={treatments} gates={gates} life={life}
@@ -4338,6 +4685,7 @@ export default function ArgusMVP() {
           </div>
         )}
       </div>
+     </ActorCtx.Provider>
     </ThemeCtx.Provider>
   );
 }

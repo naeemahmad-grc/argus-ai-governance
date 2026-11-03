@@ -16,7 +16,7 @@ import { gapAssessment } from "./riskLibrary.js";
 export const COVERAGE_METHOD =
   "Share of applicable requirements with at least one enabled, approved policy or always-on platform capability mapped to them. It shows that a control exists, not that it works.";
 export const FULFILLMENT_METHOD =
-  "Evidence-weighted. Met counts as 1 (an approved, enabled control with evidence on file, or an always-on platform capability), Partially met as 0.5 (approved without evidence, or still in draft) and Not met as 0, divided by the applicable requirements.";
+  "Evidence-weighted. Met counts as 1 (an approved, switched-on control verified effective by a current passing test, or an always-on platform capability), Partially met as 0.5 (in place but untested or with stale test evidence, or still in draft) and Not met as 0 (no control, switched off, or failed its last test), divided by the applicable requirements. A policy document on its own doesn't make a requirement Met.";
 export const EXCLUSION_METHOD =
   "Not applicable requirements are left out of both measures: frameworks with no agent in scope, and requirements excluded with a logged reason.";
 export const SCOPE_DISCLAIMER =

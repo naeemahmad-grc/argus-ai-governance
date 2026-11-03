@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect, useContext, createContext } from "react";
+import { createPortal } from "react-dom";
 import {
   Shield, Search, Bell, Activity, Users, FileText, AlertTriangle,
   ScanSearch, Cpu, HeartPulse, ShieldAlert, CheckCircle2, Download,
   X, Filter, Plus, Info, AlertOctagon, AlertCircle, Sun, Moon,
-  RotateCcw, MessageCircle, ExternalLink, Menu, Layers, Link2, ChevronRight, Lightbulb, Upload, BadgeCheck, Clock
+  RotateCcw, MessageCircle, ExternalLink, Menu, Layers, Link2, ChevronRight, Lightbulb, Upload, BadgeCheck, Clock,
+  ClipboardCheck, Printer, Network, ListOrdered, Boxes, ArrowRight, UserCheck, FileSpreadsheet, Grid3x3
 } from "lucide-react";
 import * as d3 from "d3";
 import {
@@ -11,39 +13,44 @@ import {
   computeCoverage, frameworksForPolicy, recommendationFor, reqLabel, POLICY_ROLES, BLANK_TEMPLATE,
 } from "./frameworks.js";
 import { TRAITS, mapAgent } from "./agentMapping.js";
+import {
+  RISK_CATEGORIES, LIKELIHOOD, IMPACT, RISK_BANDS, GAP_STATUS, AGENT_SCORE_METHOD, GAP_SCORE_METHOD,
+  riskLevel, scoreAgent, buildRegister, gapAssessment,
+} from "./riskLibrary.js";
+import { LANES, COMPONENT_TYPES, AGBOM_SECTION, buildArchitecture, toAgBOM } from "./architecture.js";
 
 /* ---------------- seed data ---------------- */
 
 const tr = (...ids) => Object.fromEntries(ids.map(id => [id, true]));
 const SEED_AGENTS = [
-  { id: 1, name: "Aria CX Bot", model: "gpt-4o", dept: "Customer Success", status: "active", risk: "LOW", score: 18, autonomy: "Supervised", owner: "CX Ops",
+  { id: 1, name: "Aria CX Bot", model: "gpt-4o", dept: "Customer Success", status: "active", autonomy: "Supervised", owner: "CX Ops",
     desc: "Answers customer support questions in chat for customers in the US and EU, looks up order and account status, and hands off to a human agent when it can't resolve an issue.",
     traits: tr("customerFacing", "personalData", "euScope", "tools", "retrieval", "persistentMemory"), exclusions: {} },
-  { id: 2, name: "DataSync Pro", model: "claude-3-5-sonnet", dept: "Engineering", status: "active", risk: "MEDIUM", score: 42, autonomy: "Semi-autonomous", owner: "Platform Eng",
+  { id: 2, name: "DataSync Pro", model: "claude-3-5-sonnet", dept: "Engineering", status: "active", autonomy: "Semi-autonomous", owner: "Platform Eng",
     desc: "Reconciles customer and billing records between the CRM, data warehouse and finance systems overnight, and opens tickets for records it can't match.",
     traits: tr("personalData", "financialData", "tools"), exclusions: {} },
-  { id: 3, name: "ThreatWatch AI", model: "gpt-4o", dept: "Security", status: "active", risk: "HIGH", score: 67, autonomy: "Semi-autonomous", owner: "SecOps",
+  { id: 3, name: "ThreatWatch AI", model: "gpt-4o", dept: "Security", status: "active", autonomy: "Semi-autonomous", owner: "SecOps",
     desc: "Triages security alerts, enriches them from external threat-intelligence APIs, and coordinates with the SOC's response agents to open and route incidents.",
     traits: tr("tools", "retrieval", "multiAgent"), exclusions: {} },
-  { id: 4, name: "HireFlow Agent", model: "claude-3-haiku", dept: "HR", status: "active", risk: "LOW", score: 12, autonomy: "Supervised", owner: "People Ops",
+  { id: 4, name: "HireFlow Agent", model: "claude-3-haiku", dept: "HR", status: "active", autonomy: "Supervised", owner: "People Ops",
     desc: "Screens and ranks job applications against role requirements for US and EU openings, and drafts shortlist summaries for recruiters to review.",
     traits: tr("consequential", "customerFacing", "personalData", "euScope"), exclusions: {} },
-  { id: 5, name: "FinanceBot Alpha", model: "gpt-4o", dept: "Finance", status: "suspended", risk: "CRITICAL", score: 89, autonomy: "Full autonomy", owner: "FP&A",
+  { id: 5, name: "FinanceBot Alpha", model: "gpt-4o", dept: "Finance", status: "suspended", autonomy: "Full autonomy", owner: "FP&A",
     desc: "Automates accounts-payable reconciliation and vendor follow-ups, including emailing vendors about invoices and payment status. Suspended after repeated policy violations.",
     traits: tr("personalData", "euScope", "financialData", "externalComms", "tools"), exclusions: {} },
-  { id: 6, name: "MarketSentinel", model: "claude-3-5-sonnet", dept: "Marketing", status: "active", risk: "MEDIUM", score: 35, autonomy: "Supervised", owner: "Growth",
+  { id: 6, name: "MarketSentinel", model: "claude-3-5-sonnet", dept: "Marketing", status: "active", autonomy: "Supervised", owner: "Growth",
     desc: "Monitors competitor news and social channels, summarizes trends, and drafts campaign copy that marketers review before publishing.",
     traits: tr("externalComms", "tools", "retrieval", "sharedOutput"), exclusions: {} },
-  { id: 7, name: "CodeReview AI", model: "gpt-4o", dept: "Engineering", status: "active", risk: "LOW", score: 22, autonomy: "Supervised", owner: "Dev Experience",
+  { id: 7, name: "CodeReview AI", model: "gpt-4o", dept: "Engineering", status: "active", autonomy: "Supervised", owner: "Dev Experience",
     desc: "Reviews pull requests, suggests fixes, and runs generated tests in CI. Suggestions are applied only after an engineer approves them.",
     traits: tr("codeExec", "tools", "retrieval"), exclusions: {} },
-  { id: 8, name: "LegalScan Bot", model: "claude-3-5-sonnet", dept: "Legal", status: "pending", risk: "MEDIUM", score: 38, autonomy: "Supervised", owner: "Legal Ops",
+  { id: 8, name: "LegalScan Bot", model: "claude-3-5-sonnet", dept: "Legal", status: "pending", autonomy: "Supervised", owner: "Legal Ops",
     desc: "Reviews incoming vendor contracts against the legal playbook and flags non-standard clauses for counsel. Pending security review before activation.",
     traits: tr("personalData", "euScope", "retrieval"), exclusions: {} },
-  { id: 9, name: "JobFit", model: "Claude (claude.ai skill)", dept: "Personal Projects", status: "pending", risk: "LOW", score: 20, autonomy: "Supervised", owner: "John Smith",
+  { id: 9, name: "JobFit", model: "Claude (claude.ai skill)", dept: "Personal Projects", status: "pending", autonomy: "Supervised", owner: "John Smith",
     desc: "Tailors a candidate's resume to a specific job posting. Fetches the posting from the web, scores fit from a recruiter's perspective, stops to ask the candidate about information gaps before rewriting, and produces an editable DOCX resume. Must never invent employers, dates, credentials, skills or metrics.",
     traits: tr("personalData", "tools", "codeExec", "sharedOutput"), exclusions: {} },
-  { id: 10, name: "ClaimsGuide", model: "claude-3-5-sonnet", dept: "Operations", status: "pending", risk: "HIGH", score: 58, autonomy: "Semi-autonomous", owner: "Claims Ops",
+  { id: 10, name: "ClaimsGuide", model: "claude-3-5-sonnet", dept: "Operations", status: "pending", autonomy: "Semi-autonomous", owner: "Claims Ops",
     desc: "Helps health-plan members in the US and EU file and track medical claims. Checks eligibility against plan documents, recommends approve or deny to claims examiners, pays approved claims through the payments API, sends members decision letters, remembers each member's claim history, and hands suspicious claims to the fraud-detection agent.",
     traits: tr("consequential", "customerFacing", "personalData", "euScope", "healthData", "financialData", "externalComms", "sharedOutput", "tools", "retrieval", "multiAgent", "persistentMemory"), exclusions: {} },
 ];
@@ -52,28 +59,28 @@ const SEED_AGENTS = [
 const FEEDBACK_URL = "https://tally.so/r/YOUR-FORM-ID";
 
 const SEED_POLICIES = [
-  { id: "p1", tag: "Data Privacy", name: "Block PII Export to External APIs", desc: "Prevents any AI agent from sending personally identifiable information to external third-party APIs without explicit authorization.", action: "BLOCK", violations: 7, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11" },
-  { id: "p2", tag: "External Communication", name: "Require Approval for Outbound Emails", desc: "All agent-initiated outbound emails to external domains must receive human approval before sending.", action: "REQUIRE APPROVAL", violations: 3, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11" },
-  { id: "p3", tag: "HIPAA", name: "Restrict HIPAA Record Access", desc: "Agents without explicit HIPAA clearance are blocked from accessing health-related records.", action: "BLOCK", violations: 12, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-01-20" },
-  { id: "p4", tag: "GDPR", name: "Audit Financial Data Reads", desc: "Log all agent access to financial systems for SOX compliance.", action: "AUDIT", violations: 0, enabled: true, frameworks: [], owner: "Chief Compliance Officer", status: "approved", approvedBy: "Head of Internal Audit", approvedOn: "2026-01-20" },
-  { id: "p5", tag: "Access Control", name: "Limit Full-Autonomy Agent Actions", desc: "Agents with full autonomy level require supervisor approval for any write operations.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-03-04" },
-  { id: "p6", tag: "Access Control", name: "Block Admin Privilege Escalation", desc: "Prevents agents from acquiring admin permissions they were not originally granted.", action: "BLOCK", violations: 2, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "Chief Risk Officer", approvedOn: "2026-01-20" },
-  { id: "p7", tag: "GDPR", name: "GDPR Data Deletion Compliance", desc: "Ensures agents processing EU customer data respect deletion requests within 72 hours.", action: "AUDIT", violations: 0, enabled: false, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-03-04" },
+  { id: "p1", tag: "Data Privacy", name: "Block PII Export to External APIs", desc: "Prevents any AI agent from sending personally identifiable information to external third-party APIs without explicit authorization.", action: "BLOCK", violations: 7, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11", doc: { name: "AI-POL-001 PII Export Policy v2.pdf", uploadedOn: "2026-02-11", seeded: true } },
+  { id: "p2", tag: "External Communication", name: "Require Approval for Outbound Emails", desc: "All agent-initiated outbound emails to external domains must receive human approval before sending.", action: "REQUIRE APPROVAL", violations: 3, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-02-11", doc: { name: "AI-POL-002 Outbound Communications Approval.pdf", uploadedOn: "2026-02-11", seeded: true } },
+  { id: "p3", tag: "HIPAA", name: "Restrict HIPAA Record Access", desc: "Agents without explicit HIPAA clearance are blocked from accessing health-related records.", action: "BLOCK", violations: 12, enabled: true, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-01-20", doc: { name: "AI-POL-003 HIPAA Access Standard.pdf", uploadedOn: "2026-01-20", seeded: true } },
+  { id: "p4", tag: "GDPR", name: "Audit Financial Data Reads", desc: "Log all agent access to financial systems for SOX compliance.", action: "AUDIT", violations: 0, enabled: true, frameworks: [], owner: "Chief Compliance Officer", status: "approved", approvedBy: "Head of Internal Audit", approvedOn: "2026-01-20", doc: { name: "AI-POL-004 Financial Data Access Logging.pdf", uploadedOn: "2026-01-20", seeded: true } },
+  { id: "p5", tag: "Access Control", name: "Limit Full-Autonomy Agent Actions", desc: "Agents with full autonomy level require supervisor approval for any write operations.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-03-04", doc: { name: "AI-POL-005 Autonomy Levels and Write Approval.pdf", uploadedOn: "2026-03-04", seeded: true } },
+  { id: "p6", tag: "Access Control", name: "Block Admin Privilege Escalation", desc: "Prevents agents from acquiring admin permissions they were not originally granted.", action: "BLOCK", violations: 2, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "Chief Risk Officer", approvedOn: "2026-01-20", doc: { name: "AI-POL-006 Privileged Access for Agents.pdf", uploadedOn: "2026-01-20", seeded: true } },
+  { id: "p7", tag: "GDPR", name: "GDPR Data Deletion Compliance", desc: "Ensures agents processing EU customer data respect deletion requests within 72 hours.", action: "AUDIT", violations: 0, enabled: false, frameworks: [], owner: "Chief Privacy Officer / DPO", status: "approved", approvedBy: "General Counsel", approvedOn: "2026-03-04", doc: { name: "AI-POL-007 GDPR Deletion Procedure.pdf", uploadedOn: "2026-03-04", seeded: true } },
   { id: "p8", tag: "Custom", name: "Rate Limit External API Calls", desc: "Warns when an agent makes more than 1000 external API calls per hour.", action: "WARN", violations: 5, enabled: true, frameworks: [], owner: "Chief Technology Officer", status: "approved", approvedBy: "Chief Information Security Officer", approvedOn: "2026-04-15" },
-  { id: "p9", tag: "AI Security", name: "Prompt Injection Guardrail", desc: "Screens user input, retrieved documents and tool outputs for injected instructions, and blocks agent actions that originate from untrusted instructions.", action: "BLOCK", violations: 6, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
-  { id: "p10", tag: "AI Security", name: "Least-Privilege Tool Scope", desc: "Each agent may only call tools on its approved allowlist. Calls outside that scope are held for human approval.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
+  { id: "p9", tag: "AI Security", name: "Prompt Injection Guardrail", desc: "Screens user input, retrieved documents and tool outputs for injected instructions, and blocks agent actions that originate from untrusted instructions.", action: "BLOCK", violations: 6, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06", doc: { name: "AI-SEC-009 Prompt Injection Guardrail Standard.pdf", uploadedOn: "2026-05-06", seeded: true } },
+  { id: "p10", tag: "AI Security", name: "Least-Privilege Tool Scope", desc: "Each agent may only call tools on its approved allowlist. Calls outside that scope are held for human approval.", action: "REQUIRE APPROVAL", violations: 4, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06", doc: { name: "AI-SEC-010 Agent Tool Allowlist Standard.pdf", uploadedOn: "2026-05-06", seeded: true } },
   { id: "p11", tag: "AI Security", name: "Block System Prompt and Secret Leakage", desc: "Filters agent responses for system prompt contents, credentials and other secrets before they leave the platform.", action: "BLOCK", violations: 1, enabled: true, frameworks: [], owner: "Chief Information Security Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
-  { id: "p12", tag: "Incident Response", name: "Auto-Suspend Rogue Agents", desc: "Suspends an agent automatically after 3 critical violations within 6 hours and pages its owner. Reinstatement requires review.", action: "BLOCK", violations: 1, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06" },
-  { id: "p13", tag: "Third-Party Risk", name: "Vet Third-Party Models and Tools", desc: "New model providers, plugins and MCP tools must pass a security and provenance review before any agent can use them.", action: "REQUIRE APPROVAL", violations: 0, enabled: true, frameworks: [], owner: "Chief Risk Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-06-10" },
+  { id: "p12", tag: "Incident Response", name: "Auto-Suspend Rogue Agents", desc: "Suspends an agent automatically after 3 critical violations within 6 hours and pages its owner. Reinstatement requires review.", action: "BLOCK", violations: 1, enabled: true, frameworks: [], owner: "Chief AI Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-05-06", doc: { name: "AI-IR-012 Agent Containment Runbook.pdf", uploadedOn: "2026-05-06", seeded: true } },
+  { id: "p13", tag: "Third-Party Risk", name: "Vet Third-Party Models and Tools", desc: "New model providers, plugins and MCP tools must pass a security and provenance review before any agent can use them.", action: "REQUIRE APPROVAL", violations: 0, enabled: true, frameworks: [], owner: "Chief Risk Officer", status: "approved", approvedBy: "AI Governance Committee", approvedOn: "2026-06-10", doc: { name: "AI-TPR-013 Third-Party Model and Tool Review.pdf", uploadedOn: "2026-06-10", seeded: true } },
 ];
 
 const SEED_AUDIT = [
   { sev: "info", ts: "11/2/2026, 3:10:00 PM", type: "Agent Registered", agent: "ClaimsGuide", desc: "ClaimsGuide registered and pending security review before activation" },
   { sev: "info", ts: "11/2/2026, 3:05:00 PM", type: "Agent Registered", agent: "JobFit", desc: "JobFit registered and pending security review before activation" },
-  { sev: "critical", ts: "5/21/2026, 11:42:25 AM", type: "Policy Violation", agent: "ThreatWatch AI", desc: "ThreatWatch AI exceeded external API rate limit — 1,247 calls in 60 minutes" },
-  { sev: "critical", ts: "5/21/2026, 10:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha accessed 3,400 EU customer PII records without GDPR deletion check" },
-  { sev: "warn", ts: "5/21/2026, 8:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha sent outbound emails to external vendors without approval" },
-  { sev: "critical", ts: "5/21/2026, 5:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha attempted to access HIPAA-tagged records without clearance" },
+  { sev: "critical", ts: "5/21/2026, 11:42:25 AM", type: "Policy Violation", agent: "ThreatWatch AI", policy: "p8", desc: "ThreatWatch AI exceeded external API rate limit — 1,247 calls in 60 minutes" },
+  { sev: "critical", ts: "5/21/2026, 10:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p1", desc: "FinanceBot Alpha accessed 3,400 EU customer PII records without GDPR deletion check" },
+  { sev: "warn", ts: "5/21/2026, 8:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p2", desc: "FinanceBot Alpha sent outbound emails to external vendors without approval" },
+  { sev: "critical", ts: "5/21/2026, 5:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p3", desc: "FinanceBot Alpha attempted to access HIPAA-tagged records without clearance" },
   { sev: "warn", ts: "5/20/2026, 11:52:25 AM", type: "Risk Change", agent: "DataSync Pro", desc: "DataSync Pro risk score updated from 35 to 42 after new financial data permissions added" },
   { sev: "critical", ts: "5/19/2026, 11:52:25 AM", type: "Agent Suspended", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha suspended after 3 critical policy violations in 6-hour window" },
   { sev: "info", ts: "5/19/2026, 11:52:25 AM", type: "Agent Registered", agent: "LegalScan Bot", desc: "LegalScan Bot registered and pending security review before activation" },
@@ -104,8 +111,8 @@ const THEMES = {
     navText: "#94a3b8",
     risk: {
       LOW: { bg: "rgba(52,211,153,.12)", fg: "#34d399", border: "rgba(52,211,153,.35)" },
-      MEDIUM: { bg: "rgba(52,211,153,.10)", fg: "#6ee7b7", border: "rgba(110,231,183,.3)" },
-      HIGH: { bg: "rgba(245,158,11,.14)", fg: "#f59e0b", border: "rgba(245,158,11,.4)" },
+      MEDIUM: { bg: "rgba(234,179,8,.12)", fg: "#eab308", border: "rgba(234,179,8,.38)" },
+      HIGH: { bg: "rgba(249,115,22,.14)", fg: "#fb923c", border: "rgba(249,115,22,.42)" },
       CRITICAL: { bg: "rgba(244,63,94,.14)", fg: "#f43f5e", border: "rgba(244,63,94,.45)" },
     },
     status: {
@@ -119,7 +126,7 @@ const THEMES = {
       AUDIT: { fg: "#94a3b8", bg: "rgba(148,163,184,.1)" },
       WARN: { fg: "#f59e0b", bg: "rgba(245,158,11,.12)" },
     },
-    bar: { LOW: "#34d399", MEDIUM: "#6ee7b7", HIGH: "#f59e0b", CRITICAL: "#f43f5e" },
+    bar: { LOW: "#34d399", MEDIUM: "#eab308", HIGH: "#f97316", CRITICAL: "#f43f5e" },
     heat: s => s >= 80
       ? { bg: "rgba(244,63,94,.12)", border: "rgba(244,63,94,.5)", fg: "#fff", sub: "#fca5b3" }
       : s >= 25
@@ -138,8 +145,8 @@ const THEMES = {
     navText: "#475569",
     risk: {
       LOW: { bg: "rgba(5,150,105,.10)", fg: "#059669", border: "rgba(5,150,105,.3)" },
-      MEDIUM: { bg: "rgba(13,148,136,.10)", fg: "#0d9488", border: "rgba(13,148,136,.3)" },
-      HIGH: { bg: "rgba(180,83,9,.10)", fg: "#b45309", border: "rgba(180,83,9,.3)" },
+      MEDIUM: { bg: "rgba(161,98,7,.10)", fg: "#a16207", border: "rgba(161,98,7,.32)" },
+      HIGH: { bg: "rgba(194,65,12,.10)", fg: "#c2410c", border: "rgba(194,65,12,.32)" },
       CRITICAL: { bg: "rgba(225,29,72,.10)", fg: "#e11d48", border: "rgba(225,29,72,.35)" },
     },
     status: {
@@ -153,7 +160,7 @@ const THEMES = {
       AUDIT: { fg: "#475569", bg: "rgba(71,85,105,.08)" },
       WARN: { fg: "#b45309", bg: "rgba(180,83,9,.1)" },
     },
-    bar: { LOW: "#10b981", MEDIUM: "#14b8a6", HIGH: "#f59e0b", CRITICAL: "#e11d48" },
+    bar: { LOW: "#10b981", MEDIUM: "#eab308", HIGH: "#f97316", CRITICAL: "#e11d48" },
     heat: s => s >= 80
       ? { bg: "rgba(225,29,72,.08)", border: "rgba(225,29,72,.4)", fg: "#be123c", sub: "#e11d48" }
       : s >= 25
@@ -950,12 +957,17 @@ function PolicyMeta({ p, onApprove }) {
       )}
       {(p.doc || tpl) && (
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-          {p.doc && (
+          {p.doc && (p.doc.url ? (
             <a href={p.doc.url} download={p.doc.name} style={link} title={p.doc.name}>
               <FileText size={13} style={{ flexShrink: 0 }} />
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.doc.name}</span>
             </a>
-          )}
+          ) : (
+            <span style={{ ...link, color: T.dim, fontWeight: 500 }} title={`${p.doc.name} (evidence on file, demo placeholder)`}>
+              <FileText size={13} style={{ flexShrink: 0 }} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.doc.name}</span>
+            </span>
+          ))}
           {tpl && <a href={tpl.template} download style={link}><Download size={13} /> Template</a>}
         </div>
       )}
@@ -1690,6 +1702,598 @@ function Heatmap({ agents, openAgent }) {
   );
 }
 
+/* ---------------- shared risk & control helpers ---------------- */
+
+const CONTROL_LABEL = { active: "In place", violated: "Violated", draft: "Draft", disabled: "Off", missing: "Not adopted" };
+
+// Live status of any policy or recommended control, including violations by a given agent
+const controlStatus = (id, policies, audit = [], agentName) => {
+  const p = policies.find(x => x.id === id);
+  const tpl = RECOMMENDED_POLICIES.find(t => t.id === id);
+  const violated = !!agentName && audit.some(e => e.agent === agentName && e.type === "Policy Violation" && e.policy === id);
+  const state = violated ? "violated" : !p ? "missing" : p.status === "draft" ? "draft" : !p.enabled ? "disabled" : "active";
+  return { id, name: p?.name ?? tpl?.name ?? id, state, template: tpl };
+};
+
+function ControlPill({ c }) {
+  const T = useT();
+  const red = T.isDark ? "#f43f5e" : "#e11d48";
+  const amber = T.isDark ? "#f59e0b" : "#b45309";
+  const st = c.state === "active" ? { fg: T.blue, bg: T.blueSoft, border: T.blueBorder }
+    : c.state === "violated" ? { fg: red, bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.4)" : "rgba(225,29,72,.3)" }
+    : { fg: amber, bg: "transparent", border: T.isDark ? "rgba(245,158,11,.4)" : "rgba(180,83,9,.35)" };
+  return <Pill small fg={st.fg} bg={st.bg} border={st.border}>{c.name}{c.state === "active" ? "" : ` · ${CONTROL_LABEL[c.state]}`}</Pill>;
+}
+
+// The one action that moves a control toward "in place"
+function ControlAction({ c, actions, small = true }) {
+  const T = useT();
+  const btn = { display: "inline-flex", alignItems: "center", gap: 5, fontSize: small ? 12 : 13, fontWeight: 700, padding: small ? "4px 9px" : "6px 11px", borderRadius: 6, border: "none", background: T.blue, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" };
+  if (c.state === "missing" && c.template) return <button style={btn} onClick={() => actions.createPolicy(c.template.id)}><Plus size={12} /> Create from template</button>;
+  if (c.state === "draft") return <button style={btn} onClick={() => actions.approve(c.id)}><BadgeCheck size={12} /> Approve</button>;
+  if (c.state === "disabled") return <button style={btn} onClick={() => actions.togglePolicy(c.id)}>Enable policy</button>;
+  return null;
+}
+
+function RiskScore({ s, label, big }) {
+  const T = useT();
+  const lv = riskLevel(s.score), st = T.risk[lv];
+  return (
+    <span title={`Likelihood ${s.l} (${LIKELIHOOD[s.l - 1]}) × impact ${s.i} (${IMPACT[s.i - 1]}) = ${s.score}`}
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: big ? "5px 10px" : "2px 8px", borderRadius: 6, background: st.bg, border: `1px solid ${st.border}`, color: st.fg, fontSize: big ? 13 : 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+      {label && <span style={{ fontWeight: 600, opacity: .8 }}>{label}</span>}{s.score} {lv[0] + lv.slice(1).toLowerCase()}
+    </span>
+  );
+}
+
+const GAP_STYLE = T => ({
+  "Met": { fg: T.isDark ? "#34d399" : "#059669", bg: T.isDark ? "rgba(52,211,153,.1)" : "rgba(5,150,105,.08)", border: T.isDark ? "rgba(52,211,153,.35)" : "rgba(5,150,105,.3)" },
+  "Partially met": { fg: T.isDark ? "#f59e0b" : "#b45309", bg: T.isDark ? "rgba(245,158,11,.1)" : "rgba(180,83,9,.07)", border: T.isDark ? "rgba(245,158,11,.35)" : "rgba(180,83,9,.3)" },
+  "Not met": { fg: T.isDark ? "#f43f5e" : "#e11d48", bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.35)" : "rgba(225,29,72,.3)" },
+  "Not applicable": { fg: T.faint, bg: T.panelSoft, border: T.border },
+});
+const GapPill = ({ status }) => { const T = useT(); const s = GAP_STYLE(T)[status]; return <Pill small fg={s.fg} bg={s.bg} border={s.border}>{status}</Pill>; };
+
+const toCSV = rows => "﻿" + rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+const downloadFile = (name, content, type) => {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+
+const SegTabs = ({ tabs, value, onChange }) => {
+  const T = useT();
+  return (
+    <div role="tablist" style={{ display: "flex", background: T.panel, border: `1px solid ${T.border}`, borderRadius: 9, padding: 3, gap: 3, width: "fit-content", maxWidth: "100%", overflowX: "auto" }}>
+      {tabs.map(([id, label, icon]) => (
+        <button key={id} role="tab" aria-selected={value === id} onClick={() => onChange(id)} style={{
+          display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 13.5, fontWeight: 600,
+          cursor: "pointer", whiteSpace: "nowrap", background: value === id ? T.blue : "transparent", color: value === id ? "#fff" : T.dim,
+        }}>{icon}{label}</button>
+      ))}
+    </div>
+  );
+};
+
+/* ---------------- agent architecture ---------------- */
+
+const ARCH = { BW: 142, BH: 56, VG: 18, TOP: 50, BOTTOM: 26, PADIN: 10, TRACK: 7, MINGUT: 22, BADGE_H: 16 };
+
+// Orthogonal polyline with rounded corners
+function roundedPath(raw) {
+  const pts = raw.filter((p, i) => i === 0 || p[0] !== raw[i - 1][0] || p[1] !== raw[i - 1][1]);
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+    const r = Math.min(6, Math.hypot(x1 - x0, y1 - y0) / 2, Math.hypot(x2 - x1, y2 - y1) / 2);
+    d += ` L${x1 - Math.sign(x1 - x0) * r} ${y1 - Math.sign(y1 - y0) * r} Q${x1} ${y1} ${x1 + Math.sign(x2 - x1) * r} ${y1 + Math.sign(y2 - y1) * r}`;
+  }
+  const l = pts[pts.length - 1];
+  return d + ` L${l[0]} ${l[1]}`;
+}
+
+/*
+ * Lay out lanes and boxes, then route every flow orthogonally through the
+ * gutters between lanes. Each vertical run gets its own track (interval
+ * coloring, innermost track first) so lines never overlap, and gutters widen
+ * to fit their tracks. Lines never pass through a component.
+ */
+function computeDiagram(arch) {
+  const { BW, BH, VG, TOP, BOTTOM, PADIN, TRACK, MINGUT } = ARCH;
+  const laneW = BW + 2 * PADIN;
+  const lanes = LANES.map(l => ({ ...l, comps: arch.components.filter(c => c.lane === l.id) })).filter(l => l.comps.length);
+  const n = lanes.length;
+  const maxN = Math.max(...lanes.map(l => l.comps.length));
+  const H = TOP + maxN * BH + (maxN - 1) * VG + BOTTOM;
+
+  const yPos = {}, laneOf = {};
+  lanes.forEach((l, li) => {
+    const total = l.comps.length * BH + (l.comps.length - 1) * VG;
+    const y0 = TOP + (H - TOP - BOTTOM - total) / 2;
+    l.comps.forEach((c, i) => { yPos[c.id] = y0 + i * (BH + VG); laneOf[c.id] = li; });
+  });
+
+  const groups = [];
+  arch.flows.forEach(f => {
+    const g = groups.find(x => x.from === f.from && x.to === f.to);
+    if (g) g.flows.push(f); else groups.push({ from: f.from, to: f.to, flows: [f] });
+  });
+
+  // ports: spread every edge that touches a box side along that side, ordered by the other end's height
+  const sideFor = (id, other) => (laneOf[other] >= laneOf[id] ? "right" : "left");
+  const ports = {};
+  groups.forEach((g, gi) => {
+    [["from", g.from, g.to], ["to", g.to, g.from]].forEach(([end, id, other]) => {
+      const key = `${id}:${sideFor(id, other)}`;
+      (ports[key] = ports[key] || []).push({ gi, end, otherY: yPos[other] });
+    });
+  });
+  const portY = {};
+  Object.entries(ports).forEach(([key, list]) => {
+    const y = yPos[key.split(":")[0]];
+    list.sort((p, q) => p.otherY - q.otherY).forEach((p, k) => { portY[`${p.gi}:${p.end}`] = y + (BH * (k + 1)) / (list.length + 1); });
+  });
+
+  // horizontal crossing height for flows that skip over a lane
+  const usedY = [];
+  const freeY = (laneIdx, pref) => {
+    const boxes = laneIdx.flatMap(li => lanes[li].comps.map(c => yPos[c.id]));
+    let best = null;
+    for (let y = 40; y <= H - 8; y += 2) {
+      if (boxes.some(by => y > by - 7 && y < by + BH + 7)) continue;
+      if (usedY.some(u => Math.abs(u - y) < 6)) continue;
+      if (best === null || Math.abs(y - pref) < Math.abs(best - pref)) best = y;
+    }
+    const y = best ?? H - 10;
+    usedY.push(y);
+    return y;
+  };
+
+  // vertical runs: boundary k sits between lane k-1 and lane k; inner = side the run is entered from
+  const segs = [];
+  groups.forEach((g, gi) => {
+    const la = laneOf[g.from], lb = laneOf[g.to];
+    const ya = portY[`${gi}:from`], yb = portY[`${gi}:to`];
+    g.ya = ya; g.yb = yb;
+    if (la === lb) { g.kind = "loop"; segs.push({ gi, k: la + 1, y1: ya, y2: yb, inner: "left", part: 0 }); return; }
+    const dir = lb > la ? 1 : -1, inner = dir > 0 ? "left" : "right";
+    const k1 = dir > 0 ? la + 1 : la, k2 = dir > 0 ? lb : lb + 1;
+    g.dir = dir;
+    if (k1 === k2) { g.kind = "adj"; segs.push({ gi, k: k1, y1: ya, y2: yb, inner, part: 0 }); return; }
+    const mid = []; for (let k = Math.min(la, lb) + 1; k < Math.max(la, lb); k++) mid.push(k);
+    g.kind = "skip"; g.yF = freeY(mid, (ya + yb) / 2);
+    segs.push({ gi, k: k1, y1: ya, y2: g.yF, inner, part: 0 }, { gi, k: k2, y1: g.yF, y2: yb, inner, part: 1 });
+  });
+
+  // interval coloring per boundary and side; upward runs take inner tracks from the top, downward from the bottom
+  const trackCount = {};
+  for (let k = 0; k <= n; k++) {
+    let total = 0;
+    ["left", "right"].forEach(side => {
+      const list = segs.filter(s => s.k === k && s.inner === side)
+        .sort((a, b) => (a.y2 < a.y1 ? a.y1 : 1e6 - a.y1) - (b.y2 < b.y1 ? b.y1 : 1e6 - b.y1));
+      const tracks = [];
+      list.forEach(s => {
+        const lo = Math.min(s.y1, s.y2) - 4, hi = Math.max(s.y1, s.y2) + 4;
+        let t = tracks.findIndex(iv => iv.every(([a, b]) => hi < a || lo > b));
+        if (t < 0) { tracks.push([]); t = tracks.length - 1; }
+        tracks[t].push([lo, hi]); s.track = t;
+      });
+      total += tracks.length;
+      trackCount[`${k}:${side}`] = tracks.length;
+    });
+    trackCount[k] = total;
+  }
+
+  const gut = Array.from({ length: n + 1 }, (_, k) => Math.max(MINGUT, (trackCount[k] + 1) * TRACK + 8));
+  const laneX = []; let x = 0;
+  for (let li = 0; li < n; li++) { x += gut[li]; laneX.push(x); x += laneW; }
+  const W = x + gut[n];
+  const gutterLeft = k => (k === 0 ? 0 : laneX[k - 1] + laneW);
+  const trackX = s => {
+    const L = trackCount[`${s.k}:left`], R = trackCount[`${s.k}:right`];
+    const start = gutterLeft(s.k) + (gut[s.k] - (L + R - 1) * TRACK) / 2;
+    const idx = s.inner === "left" ? s.track : L + (R - 1 - s.track);
+    return start + idx * TRACK;
+  };
+
+  const pos = {};
+  lanes.forEach((l, li) => l.comps.forEach(c => { pos[c.id] = { x: laneX[li] + PADIN, y: yPos[c.id], w: BW, h: BH }; }));
+
+  const placed = [];
+  const edges = groups.map((g, gi) => {
+    const a = pos[g.from], b = pos[g.to];
+    const mine = segs.filter(s => s.gi === gi).sort((p, q) => p.part - q.part);
+    const tx = mine.map(trackX);
+    let raw;
+    if (g.kind === "loop") raw = [[a.x + a.w, g.ya], [tx[0], g.ya], [tx[0], g.yb], [b.x + b.w, g.yb]];
+    else {
+      const x1 = g.dir > 0 ? a.x + a.w : a.x, x2 = g.dir > 0 ? b.x : b.x + b.w;
+      raw = g.kind === "adj"
+        ? [[x1, g.ya], [tx[0], g.ya], [tx[0], g.yb], [x2, g.yb]]
+        : [[x1, g.ya], [tx[0], g.ya], [tx[0], g.yF], [tx[1], g.yF], [tx[1], g.yb], [x2, g.yb]];
+    }
+    // badge: slide along the longest run until it clears other badges
+    const steps = [...new Set(g.flows.map(f => f.step))].join(",");
+    const bw = 10 + steps.length * 6.2;
+    const runs = raw.slice(0, -1).map((p, i) => [p, raw[i + 1]]).sort((p, q) => Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) - Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1]));
+    let badge = null;
+    for (const [p, q] of runs) {
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      for (const off of [0, -18, 18, -36, 36, -54, 54, -72, 72]) {
+        const t = 0.5 + off / Math.max(len, 1);
+        if (t < 0.12 || t > 0.88) continue;
+        const cand = { x: p[0] + (q[0] - p[0]) * t, y: p[1] + (q[1] - p[1]) * t };
+        if (placed.every(o => Math.abs(o.x - cand.x) > (o.w + bw) / 2 + 2 || Math.abs(o.y - cand.y) > ARCH.BADGE_H + 2)) { badge = cand; break; }
+      }
+      if (badge) break;
+    }
+    if (!badge) { const [p, q] = runs[0]; badge = { x: (p[0] + q[0]) / 2, y: (p[1] + q[1]) / 2 }; }
+    placed.push({ ...badge, w: bw });
+    return { ...g, d: roundedPath(raw), badge, badgeW: bw, steps, violation: g.flows.some(f => f.violation) };
+  });
+
+  return { lanes, laneX, laneW, pos, W, H, edges };
+}
+
+const wrapText = (s, n) => {
+  const words = s.split(" "); const lines = [""];
+  words.forEach(w => { const cur = lines[lines.length - 1]; if ((cur + " " + w).trim().length <= n) lines[lines.length - 1] = (cur + " " + w).trim(); else lines.push(w); });
+  if (lines.length > 2) { lines.length = 2; lines[1] = lines[1].slice(0, n - 1) + "…"; }
+  return lines;
+};
+
+// Worst residual risk on a component, for this agent
+const componentRisk = (comp, riskById) => {
+  const rs = comp.risks.map(id => riskById[id]).filter(Boolean);
+  return { rs, worst: rs.length ? Math.max(...rs.map(r => r.residual.score)) : null };
+};
+const statusColor = (T, worst) => worst === null ? T.faint : worst >= 10 ? (T.isDark ? "#f43f5e" : "#e11d48") : worst >= 5 ? (T.isDark ? "#f59e0b" : "#b45309") : (T.isDark ? "#34d399" : "#059669");
+
+function ArchDiagram({ arch, riskById, selected, onSelect }) {
+  const T = useT();
+  const L = useMemo(() => computeDiagram(arch), [arch]);
+  const edges = L.edges;
+  const red = T.isDark ? "#f43f5e" : "#e11d48";
+  const linked = e => selected && (e.from === selected || e.to === selected);
+  const ordered = [...edges].sort((a, b) => Number(linked(a)) - Number(linked(b)));
+  const edgeColor = e => e.violation ? red : linked(e) ? T.blue : T.dim;
+
+  return (
+    <svg viewBox={`0 0 ${L.W} ${L.H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img"
+      aria-label={`Architecture diagram of ${arch.components.length} components and ${arch.flows.length} data flows`}>
+      <defs>
+        {[["n", T.dim], ["h", T.blue], ["v", red]].map(([k, col]) => (
+          <marker key={k} id={`arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill={col} />
+          </marker>
+        ))}
+      </defs>
+
+      {L.lanes.map((l, li) => {
+        const boundary = l.id === "agent", untrusted = l.id === "untrusted";
+        return (
+          <g key={l.id}>
+            <rect x={L.laneX[li]} y={6} width={L.laneW} height={L.H - 12} rx={10}
+              fill={boundary ? T.blueSoft : untrusted ? (T.isDark ? "rgba(244,63,94,.04)" : "rgba(225,29,72,.03)") : T.panelSoft}
+              stroke={boundary ? T.blue : untrusted ? (T.isDark ? "rgba(244,63,94,.35)" : "rgba(225,29,72,.3)") : T.border}
+              strokeWidth={boundary ? 1.5 : 1} strokeDasharray={boundary || untrusted ? "6 4" : "none"} />
+            <text x={L.laneX[li] + L.laneW / 2} y={26} textAnchor="middle" fontSize={10} fontWeight={700} letterSpacing=".04em"
+              fill={boundary ? T.blue : untrusted ? red : T.faint}>{l.label.toUpperCase()}</text>
+          </g>
+        );
+      })}
+
+      {ordered.map(e => (
+        <g key={`${e.from}-${e.to}`} opacity={selected && !linked(e) ? 0.25 : 1}>
+          <title>{e.flows.map(f => `Step ${f.step}: ${f.label}`).join("\n")}</title>
+          <path d={e.d} fill="none" stroke={edgeColor(e)} strokeWidth={linked(e) ? 2 : 1.4}
+            strokeDasharray={e.violation ? "5 4" : "none"} markerEnd={`url(#arrow-${e.violation ? "v" : linked(e) ? "h" : "n"})`} />
+        </g>
+      ))}
+
+      {arch.components.map(c => {
+        const b = L.pos[c.id];
+        const { worst } = componentRisk(c, riskById);
+        const col = statusColor(T, worst);
+        const sel = selected === c.id;
+        const lines = wrapText(c.name, 21);
+        return (
+          <g key={c.id} onClick={() => onSelect(sel ? null : c.id)} style={{ cursor: "pointer" }} role="button" tabIndex={0}
+            onKeyDown={ev => (ev.key === "Enter" || ev.key === " ") && onSelect(sel ? null : c.id)}
+            aria-label={`${c.name}, ${COMPONENT_TYPES[c.type]}${worst !== null ? `, highest residual risk ${worst}` : ""}`}
+            opacity={selected && !sel && !edges.some(e => linked(e) && (e.from === c.id || e.to === c.id)) ? 0.45 : 1}>
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={8} fill={T.panel} stroke={sel ? T.blue : T.border} strokeWidth={sel ? 2 : 1} />
+            <rect x={b.x} y={b.y + 8} width={4} height={b.h - 16} rx={2} fill={col} />
+            {lines.map((ln, i) => (
+              <text key={i} x={b.x + 13} y={b.y + 19 + i * 13.5} fontSize={11.5} fontWeight={700} fill={T.text}>{ln}</text>
+            ))}
+            <text x={b.x + 13} y={b.y + b.h - 9} fontSize={9.5} fill={T.faint}>{COMPONENT_TYPES[c.type]}</text>
+          </g>
+        );
+      })}
+
+      {edges.map(e => {
+        const steps = e.steps, w = e.badgeW;
+        return (
+          <g key={`b-${e.from}-${e.to}`} opacity={selected && !linked(e) ? 0.3 : 1} pointerEvents="none">
+            <rect x={e.badge.x - w / 2} y={e.badge.y - 8} width={w} height={16} rx={8} fill={e.violation ? red : linked(e) ? T.blue : T.panel} stroke={e.violation ? red : linked(e) ? T.blue : T.dim} strokeWidth={1} />
+            <text x={e.badge.x} y={e.badge.y + 3.5} textAnchor="middle" fontSize={9.5} fontWeight={700} fill={e.violation || linked(e) ? "#fff" : T.text}>{steps}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// Phones: lanes as stacked groups plus a numbered flow list
+function ArchStacked({ arch, riskById, selected, onSelect }) {
+  const T = useT();
+  const red = T.isDark ? "#f43f5e" : "#e11d48";
+  const name = id => arch.components.find(c => c.id === id)?.name;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {LANES.map(l => {
+        const comps = arch.components.filter(c => c.lane === l.id);
+        if (!comps.length) return null;
+        const boundary = l.id === "agent", untrusted = l.id === "untrusted";
+        return (
+          <div key={l.id} style={{ border: `1px ${boundary || untrusted ? "dashed" : "solid"} ${boundary ? T.blue : untrusted ? (T.isDark ? "rgba(244,63,94,.4)" : "rgba(225,29,72,.3)") : T.border}`, borderRadius: 10, padding: 10, background: boundary ? T.blueSoft : T.panelSoft }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: boundary ? T.blue : untrusted ? red : T.faint, marginBottom: 8 }}>{l.label.toUpperCase()}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {comps.map(c => {
+                const { worst } = componentRisk(c, riskById);
+                return (
+                  <button key={c.id} onClick={() => onSelect(selected === c.id ? null : c.id)} style={{
+                    textAlign: "left", background: T.panel, border: `${selected === c.id ? 2 : 1}px solid ${selected === c.id ? T.blue : T.border}`,
+                    borderLeft: `4px solid ${statusColor(T, worst)}`, borderRadius: 8, padding: "8px 9px", cursor: "pointer", color: T.text,
+                  }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.3 }}>{c.name}</div>
+                    <div style={{ fontSize: 11, color: T.faint, marginTop: 2 }}>{COMPONENT_TYPES[c.type]}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>Data flows</div>
+      {arch.flows.map((f, i) => (
+        <div key={i} style={{ display: "flex", gap: 8, fontSize: 12.5, lineHeight: 1.45, opacity: selected && f.from !== selected && f.to !== selected ? 0.4 : 1 }}>
+          <span style={{ flexShrink: 0, minWidth: 20, height: 20, borderRadius: 10, background: f.violation ? red : T.panelSoft, border: `1px solid ${f.violation ? red : T.border}`, color: f.violation ? "#fff" : T.text, fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{f.step}</span>
+          <span><b>{name(f.from)}</b> → <b>{name(f.to)}</b>: <span style={{ color: f.violation ? red : T.dim }}>{f.label}</span></span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ComponentDetail({ comp, arch, riskById, policies, audit, agent, actions, onClose }) {
+  const T = useT();
+  const { rs } = componentRisk(comp, riskById);
+  const name = id => arch.components.find(c => c.id === id)?.name;
+  const flows = arch.flows.filter(f => f.from === comp.id || f.to === comp.id);
+  const red = T.isDark ? "#f43f5e" : "#e11d48";
+  return (
+    <div style={{ marginTop: 12, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>{comp.name}</div>
+          <div style={{ fontSize: 12, color: T.faint, marginTop: 2 }}>{COMPONENT_TYPES[comp.type]} · {LANES.find(l => l.id === comp.lane).label}</div>
+        </div>
+        <button onClick={onClose} aria-label="Close component details" style={{ background: "none", border: "none", color: T.dim, cursor: "pointer", alignSelf: "flex-start" }}><X size={16} /></button>
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.5, marginTop: 8, color: T.dim }}>{comp.detail}</div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, margin: "12px 0 6px" }}>Threats at this component</div>
+      {rs.length === 0 && <div style={{ fontSize: 12.5, color: T.faint }}>No risk scenarios for this agent are placed here.</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rs.map(r => (
+          <div key={r.id} style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}><span style={{ color: T.faint, fontFamily: "ui-monospace, monospace", fontSize: 11.5 }}>{r.id}</span> {r.title}</div>
+              <RiskScore s={r.residual} label="Residual" />
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6 }}>
+              {r.refs.map(x => <Pill key={x} small fg={T.dim} bg={T.panelSoft} border={T.border}>{x}</Pill>)}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 7, alignItems: "center" }}>
+              {r.controls.length === 0 && <span style={{ fontSize: 12, color: T.faint }}>No mapped controls in scope.</span>}
+              {r.controls.map(c => {
+                const st = controlStatus(c.id, policies, audit, agent.name);
+                return <span key={c.id} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><ControlPill c={st} /><ControlAction c={st} actions={actions} /></span>;
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {flows.length > 0 && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 700, margin: "12px 0 6px" }}>Data flows</div>
+          {flows.map((f, i) => (
+            <div key={i} style={{ fontSize: 12.5, lineHeight: 1.5, color: f.violation ? red : T.dim }}>
+              Step {f.step}: {name(f.from)} → {name(f.to)}, {f.label.charAt(0).toLowerCase() + f.label.slice(1)}{f.violation ? " (violation)" : ""}
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+function WorkflowView({ arch, policies, audit, agent, actions }) {
+  const T = useT();
+  const red = T.isDark ? "#f43f5e" : "#e11d48";
+  const green = T.isDark ? "#34d399" : "#059669";
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {arch.workflow.map((w, i) => (
+        <div key={i} style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 800,
+              background: w.violation ? red : w.checkpoint ? green : T.blueSoft, color: w.violation || w.checkpoint ? "#fff" : T.blue, border: `1px solid ${w.violation ? red : w.checkpoint ? green : T.blueBorder}` }}>{i + 1}</div>
+            {i < arch.workflow.length - 1 && <div style={{ width: 2, flex: 1, minHeight: 14, background: T.border, margin: "4px 0" }} />}
+          </div>
+          <div style={{ paddingBottom: 16, minWidth: 0, flex: 1 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>{w.title}</span>
+              <Pill small fg={T.dim} bg={T.panelSoft} border={T.border}>{w.actor}</Pill>
+              {w.checkpoint && <Pill small fg={green} bg="transparent" border={green}><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><UserCheck size={11} /> Human checkpoint</span></Pill>}
+              {w.violation && <Pill small fg={red} bg="transparent" border={red}>Violation recorded</Pill>}
+            </div>
+            <div style={{ fontSize: 13, color: T.dim, lineHeight: 1.5, marginTop: 4 }}>{w.detail}</div>
+            {w.controls.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 7, alignItems: "center" }}>
+                {w.controls.map(id => {
+                  const st = controlStatus(id, policies, audit, agent.name);
+                  return <span key={id} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><ControlPill c={st} /><ControlAction c={st} actions={actions} /></span>;
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ComponentsView({ arch, agent, riskById }) {
+  const T = useT();
+  const sections = [...new Set(arch.components.map(c => AGBOM_SECTION[c.type]))];
+  const exportBom = () => downloadFile(`${agent.name.replace(/\W+/g, "-").toLowerCase()}-agbom.json`, JSON.stringify(toAgBOM(agent, arch), null, 2), "application/json");
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.5, flex: "1 1 260px" }}>
+          Inventory of the agent's parts, grouped like the OWASP Agent Bill of Materials (AgBOM).
+        </div>
+        <button onClick={exportBom} style={{ display: "flex", alignItems: "center", gap: 6, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <Download size={14} /> Export AgBOM (JSON)
+        </button>
+      </div>
+      {sections.map(sec => (
+        <div key={sec} style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".06em", color: T.faint, marginBottom: 6 }}>{sec.toUpperCase()}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {arch.components.filter(c => AGBOM_SECTION[c.type] === sec).map(c => {
+              const { worst } = componentRisk(c, riskById);
+              return (
+                <div key={c.id} style={{ display: "flex", gap: 10, background: T.panelSoft, border: `1px solid ${T.border}`, borderLeft: `4px solid ${statusColor(T, worst)}`, borderRadius: 8, padding: "9px 11px" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600 }}>{c.name}</div>
+                    <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.45, marginTop: 2 }}>{c.detail}</div>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: T.faint, whiteSpace: "nowrap" }}>{LANES.find(l => l.id === c.lane).label}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ArchitectureTab({ agent, policies, audit, actions }) {
+  const T = useT();
+  const arch = useMemo(() => buildArchitecture(agent), [agent.name, agent.model, agent.autonomy, agent.dept, JSON.stringify(agent.traits)]);
+  const riskById = useMemo(() => Object.fromEntries(agent.risks.map(r => [r.id, r])), [agent.risks]);
+  const [view, setView] = useState("diagram");
+  const [sel, setSel] = useState(null);
+  const comp = sel && arch.components.find(c => c.id === sel);
+  const red = T.isDark ? "#f43f5e" : "#e11d48";
+  const legend = [
+    [statusColor(T, 12), "High or critical residual risk"], [statusColor(T, 6), "Medium"], [statusColor(T, 2), "Low"], [T.faint, "No risk placed"],
+  ];
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+        <Pill small fg={arch.generated ? T.dim : T.blue} bg={arch.generated ? T.panelSoft : T.blueSoft} border={arch.generated ? T.border : T.blueBorder}>
+          {arch.generated ? "Generated from characteristics" : "Declared architecture"}
+        </Pill>
+        <span style={{ fontSize: 12, color: T.faint }}>{arch.components.length} components · {arch.flows.length} data flows · {arch.workflow.filter(w => w.checkpoint).length} human checkpoints</span>
+      </div>
+      <div style={{ fontSize: 13.5, lineHeight: 1.55, marginBottom: 14 }}>{arch.summary}</div>
+
+      <div style={{ marginBottom: 14 }}>
+        <SegTabs value={view} onChange={setView} tabs={[["diagram", "Diagram", <Network size={14} key="i" />], ["workflow", "Workflow", <ListOrdered size={14} key="i" />], ["components", "Components", <Boxes size={14} key="i" />]]} />
+      </div>
+
+      {view === "diagram" && (
+        <>
+          {T.mobile
+            ? <ArchStacked arch={arch} riskById={riskById} selected={sel} onSelect={setSel} />
+            : <ArchDiagram arch={arch} riskById={riskById} selected={sel} onSelect={setSel} />}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10, fontSize: 11.5, color: T.dim }}>
+            {legend.map(([c, l]) => <span key={l} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 4, height: 12, borderRadius: 2, background: c }} />{l}</span>)}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 16, borderTop: `1.5px dashed ${T.blue}` }} />Trust boundary</span>
+            {arch.flows.some(f => f.violation) && <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 16, borderTop: `1.5px dashed ${red}` }} />Flow that caused a violation</span>}
+            <span>Numbers are workflow steps. {T.mobile ? "Tap" : "Click"} a component to see its threats and controls.</span>
+          </div>
+          {comp && <ComponentDetail comp={comp} arch={arch} riskById={riskById} policies={policies} audit={audit} agent={agent} actions={actions} onClose={() => setSel(null)} />}
+        </>
+      )}
+      {view === "workflow" && <WorkflowView arch={arch} policies={policies} audit={audit} agent={agent} actions={actions} />}
+      {view === "components" && <ComponentsView arch={arch} agent={agent} riskById={riskById} />}
+    </div>
+  );
+}
+
+function AgentRiskTab({ agent, policies, audit, actions }) {
+  const T = useT();
+  const b = agent.scoreBreakdown;
+  const st = T.risk[agent.risk];
+  const sorted = [...agent.risks].sort((x, y) => y.residual.score - x.residual.score || y.inherent.score - x.inherent.score);
+  const avg = b.top.length ? (b.top.reduce((a, c) => a + c, 0) / b.top.length) : 0;
+  return (
+    <div>
+      <div style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14, marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 30, fontWeight: 800, color: st.fg }}>{agent.score}</div>
+          <div>
+            <Pill fg={st.fg} bg={st.bg} border={st.border}>{agent.risk}</Pill>
+            <div style={{ fontSize: 12, color: T.faint, marginTop: 4 }}>Agent risk score out of 100</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.6, marginTop: 10 }}>
+          Highest residual risks: <b>{b.top.join(", ") || "none"}</b> → average {avg.toFixed(1)} × 4 = <b>{b.base}</b>
+          <br />Violations on record: {b.crit} critical, {b.warn} warning → <b>+{b.incidents}</b>
+        </div>
+        <div style={{ fontSize: 12, color: T.faint, lineHeight: 1.5, marginTop: 6 }}>{AGENT_SCORE_METHOD}</div>
+      </div>
+
+      <div style={{ fontSize: 15, fontWeight: 700 }}>Risk scenarios ({sorted.length})</div>
+      <div style={{ color: T.dim, fontSize: 12.5, marginTop: 3, marginBottom: 10, lineHeight: 1.45 }}>
+        Scenarios that apply to this agent, from highest residual risk. Adopting the missing controls moves each one toward its target.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {sorted.map(r => (
+          <div key={r.id} style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 12px" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.35 }}>
+              <span style={{ color: T.faint, fontFamily: "ui-monospace, monospace", fontSize: 11.5 }}>{r.id}</span> {r.title}
+            </div>
+            <div style={{ fontSize: 12, color: T.faint, marginTop: 2 }}>{r.category}{r.autonomyBoost ? " · impact +1 for full autonomy" : ""}</div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+              <RiskScore s={r.inherent} label="Inherent" /><ArrowRight size={13} color={T.faint} />
+              <RiskScore s={r.residual} label="Residual" /><ArrowRight size={13} color={T.faint} />
+              <RiskScore s={r.target} label="Target" />
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, alignItems: "center" }}>
+              {r.controls.map(c => {
+                const s2 = controlStatus(c.id, policies, audit, agent.name);
+                return <span key={c.id} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><ControlPill c={s2} /><ControlAction c={s2} actions={actions} /></span>;
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- agent detail drawer ---------------- */
 
 const POLICY_STATE = {
@@ -1765,11 +2369,12 @@ function DrawerSection({ title, sub, children }) {
   );
 }
 
-function AgentDrawer({ agent, audit, policies, onClose, onUpdateTraits, onExclude, onInclude, onCreatePolicy, onApprove, onTogglePolicy }) {
+function AgentDrawer({ agent, audit, policies, actions, onClose, onUpdateTraits, onExclude, onInclude }) {
   const T = useT();
   const [editing, setEditing] = useState(false);
   const [draftTraits, setDraftTraits] = useState({});
   const [tab, setTab] = useState("gaps");
+  const [view, setView] = useState("overview");
   if (!agent) return null;
   const r = T.risk[agent.risk], s = T.status[agent.status];
   const events = audit.filter(e => e.agent === agent.name);
@@ -1781,15 +2386,15 @@ function AgentDrawer({ agent, audit, policies, onClose, onUpdateTraits, onExclud
 
   const policyAction = p => {
     if (p.state === "missing" && p.template) return (
-      <button onClick={() => onCreatePolicy(p.template.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 6, border: "none", background: T.blue, color: "#fff", cursor: "pointer" }}>
+      <button onClick={() => actions.createPolicy(p.template.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 6, border: "none", background: T.blue, color: "#fff", cursor: "pointer" }}>
         <Plus size={12} /> Create from template
       </button>);
     if (p.state === "draft") return (
-      <button onClick={() => onApprove(p.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 6, border: "none", background: T.blue, color: "#fff", cursor: "pointer" }}>
+      <button onClick={() => actions.approve(p.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 6, border: "none", background: T.blue, color: "#fff", cursor: "pointer" }}>
         <BadgeCheck size={12} /> Approve
       </button>);
     if (p.state === "disabled") return (
-      <button onClick={() => onTogglePolicy(p.id)} style={{ fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 6, border: "none", background: T.blue, color: "#fff", cursor: "pointer" }}>
+      <button onClick={() => actions.togglePolicy(p.id)} style={{ fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 6, border: "none", background: T.blue, color: "#fff", cursor: "pointer" }}>
         Enable policy
       </button>);
     return null;
@@ -1805,7 +2410,7 @@ function AgentDrawer({ agent, audit, policies, onClose, onUpdateTraits, onExclud
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: T.overlay, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
       <div onClick={e => e.stopPropagation()} style={{
-        width: "min(520px, 100%)", height: "100%", background: T.panel,
+        width: view === "architecture" && !T.mobile ? "min(900px, 100%)" : "min(540px, 100%)", height: "100%", background: T.panel, transition: "width .2s",
         borderLeft: `1px solid ${T.border}`, padding: T.mobile ? 18 : 26, overflowY: "auto", boxSizing: "border-box",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -1819,10 +2424,16 @@ function AgentDrawer({ agent, audit, policies, onClose, onUpdateTraits, onExclud
           <Pill fg={r.fg} bg={r.bg} border={r.border}>{agent.risk}</Pill>
         </div>
 
+        <div style={{ marginBottom: 18 }}>
+          <SegTabs value={view} onChange={setView} tabs={[["overview", "Overview"], ["architecture", "Architecture"], ["risk", `Risk (${agent.score})`]]} />
+        </div>
+        {view === "architecture" && <ArchitectureTab agent={agent} policies={policies} audit={audit} actions={actions} />}
+        {view === "risk" && <AgentRiskTab agent={agent} policies={policies} audit={audit} actions={actions} />}
+        {view === "overview" && (<>
         {agent.desc && <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>{agent.desc}</div>}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-          {[["Department", agent.dept], ["Owner", agent.owner], ["Autonomy", agent.autonomy], ["Risk Score", agent.score]].map(([k, v]) => (
+          {[["Department", agent.dept], ["Owner", agent.owner], ["Autonomy", agent.autonomy], ["Risk score", `${agent.score} / 100`]].map(([k, v]) => (
             <div key={k} style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
               <div style={{ color: T.faint, fontSize: 12, marginBottom: 4 }}>{k}</div>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{v}</div>
@@ -1882,11 +2493,640 @@ function AgentDrawer({ agent, audit, policies, onClose, onUpdateTraits, onExclud
             </div>
           ))}
         </div>
+        </>)}
       </div>
     </div>
   );
 }
 
+
+/* ---------------- risk & gap assessment ---------------- */
+
+const TREATMENTS = ["Mitigate", "Accept", "Transfer", "Avoid"];
+const TREATMENT_HINT = {
+  Mitigate: "Reduce the risk by adopting the mapped controls.",
+  Accept: "Keep the current residual risk. Requires a justification and an approver other than the owner.",
+  Transfer: "Shift the risk to a third party, for example through insurance or a contract.",
+  Avoid: "Stop the activity that creates the risk, for example by retiring or restricting the agent.",
+};
+const defaultTreatment = s => ({ treatment: "Mitigate", owner: s.owner, reviewOn: addDays(180), note: "", acceptance: null });
+
+function RiskMatrix({ items, scoreKey, title, cell, onCell }) {
+  const T = useT();
+  const count = (l, i) => items.filter(x => x[scoreKey].l === l && x[scoreKey].i === i).length;
+  return (
+    <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>{title}</div>
+      <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", fontSize: 11, color: T.faint, textAlign: "center" }}>Impact →</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 3 }}>
+            {[5, 4, 3, 2, 1].map(i => [1, 2, 3, 4, 5].map(l => {
+              const n = count(l, i), lv = riskLevel(l * i), sel = cell && cell.key === scoreKey && cell.l === l && cell.i === i;
+              return (
+                <button key={`${l}-${i}`} disabled={!n} onClick={() => onCell(sel ? null : { key: scoreKey, l, i })}
+                  aria-label={`Likelihood ${l}, impact ${i}: ${n} scenario${n === 1 ? "" : "s"}`}
+                  title={`Likelihood ${l} (${LIKELIHOOD[l - 1]}) × impact ${i} (${IMPACT[i - 1]}) = ${l * i}`}
+                  style={{
+                    aspectRatio: "1.35", borderRadius: 5, border: sel ? `2px solid ${T.text}` : "1px solid transparent",
+                    background: T.bar[lv], opacity: n ? 0.92 : 0.16, color: "#0b1120", fontWeight: 800, fontSize: 13,
+                    cursor: n ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+                  }}>{n || ""}</button>
+              );
+            }))}
+          </div>
+          <div style={{ textAlign: "center", fontSize: 11, color: T.faint, marginTop: 5 }}>Likelihood →</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RiskScenarioDrawer({ entry, treatment, policies, audit, actions, onSave, onClose, onOpenAgent }) {
+  const T = useT();
+  const [f, setF] = useState(() => ({ ...treatment, accBy: treatment.acceptance?.by || "", accReason: treatment.acceptance?.reason || "" }));
+  const set = p => setF(s => ({ ...s, ...p }));
+  const worst = [...entry.agents].sort((a, b) => b.residual.score - a.residual.score)[0];
+  const sameOwner = f.treatment === "Accept" && f.accBy && f.accBy === f.owner;
+  const valid = f.owner && f.reviewOn && (f.treatment !== "Accept" || (f.accReason.trim() && f.accBy && !sameOwner)) && (!["Transfer", "Avoid"].includes(f.treatment) || f.note.trim());
+  const save = () => onSave(entry.id, {
+    treatment: f.treatment, owner: f.owner, reviewOn: f.reviewOn, note: f.note.trim(),
+    acceptance: f.treatment === "Accept" ? { by: f.accBy, reason: f.accReason.trim(), on: new Date().toISOString().slice(0, 10) } : null,
+  });
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: T.overlay, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: "min(560px, 100%)", height: "100%", background: T.panel, borderLeft: `1px solid ${T.border}`, padding: T.mobile ? 18 : 26, overflowY: "auto", boxSizing: "border-box" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 12, color: T.faint, fontFamily: "ui-monospace, monospace" }}>{entry.id} · {entry.category}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.25, marginTop: 4 }}>{entry.title}</div>
+          </div>
+          <button onClick={onClose} aria-label="Close risk" style={{ background: "none", border: "none", color: T.dim, cursor: "pointer", alignSelf: "flex-start" }}><X size={20} /></button>
+        </div>
+        <div style={{ fontSize: 14, lineHeight: 1.55, marginTop: 10 }}>{entry.desc}</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 10 }}>
+          {entry.refs.map(x => <Pill key={x} small fg={T.dim} bg={T.panelSoft} border={T.border}>{x}</Pill>)}
+        </div>
+
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", margin: "16px 0 6px" }}>
+          <RiskScore s={entry.inherent} label="Inherent" big /><ArrowRight size={14} color={T.faint} />
+          <RiskScore s={entry.residual} label="Residual" big /><ArrowRight size={14} color={T.faint} />
+          <RiskScore s={entry.target} label="Target" big />
+        </div>
+        <div style={{ fontSize: 12, color: T.faint, marginBottom: 20, lineHeight: 1.5 }}>Register scores are the worst case across affected agents. Bands: {RISK_BANDS}.</div>
+
+        <DrawerSection title="How the residual score is calculated" sub={`Shown for ${worst.name}, the agent with the highest residual risk.`}>
+          <div style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 9, padding: "11px 13px", fontSize: 13, lineHeight: 1.65 }}>
+            <div>Inherent: likelihood <b>{worst.inherent.l}</b> ({LIKELIHOOD[worst.inherent.l - 1]}) × impact <b>{worst.inherent.i}</b> ({IMPACT[worst.inherent.i - 1]}) = <b>{worst.inherent.score}</b></div>
+            {worst.controls.length === 0 && <div style={{ color: T.dim }}>No mapped controls are in scope for this agent.</div>}
+            {worst.controls.map(c => (
+              <div key={c.id} style={{ color: c.active ? T.text : T.dim }}>
+                {c.name}: {[c.l && `−${c.l} likelihood`, c.i && `−${c.i} impact`].filter(Boolean).join(", ")}{" "}
+                <span style={{ color: c.active ? (T.isDark ? "#34d399" : "#059669") : c.violated ? (T.isDark ? "#f43f5e" : "#e11d48") : (T.isDark ? "#f59e0b" : "#b45309"), fontWeight: 600 }}>
+                  ({c.active ? "in place" : c.violated ? "violated by this agent, no credit" : `${CONTROL_LABEL[c.state].toLowerCase()}, no credit`})
+                </span>
+              </div>
+            ))}
+            <div>Residual: likelihood <b>{worst.residual.l}</b> × impact <b>{worst.residual.i}</b> = <b>{worst.residual.score}</b> ({riskLevel(worst.residual.score).toLowerCase()})</div>
+          </div>
+        </DrawerSection>
+
+        <DrawerSection title="Mitigating controls">
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            {entry.controls.map(c => {
+              const st = controlStatus(c.id, policies);
+              return (
+                <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <ControlPill c={st} />
+                  <span style={{ fontSize: 12, color: T.faint }}>{[c.l && `−${c.l} likelihood`, c.i && `−${c.i} impact`].filter(Boolean).join(", ")}</span>
+                  <ControlAction c={st} actions={actions} />
+                </div>
+              );
+            })}
+          </div>
+        </DrawerSection>
+
+        <DrawerSection title={`Affected agents (${entry.agents.length})`}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[...entry.agents].sort((a, b) => b.residual.score - a.residual.score).map(a => (
+              <button key={a.id} onClick={() => onOpenAgent(a.name)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 11px", cursor: "pointer", color: T.text, fontSize: 13.5, textAlign: "left" }}>
+                <span>{a.name}</span>
+                <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><RiskScore s={a.residual} /><ChevronRight size={15} color={T.faint} /></span>
+              </button>
+            ))}
+          </div>
+        </DrawerSection>
+
+        <DrawerSection title="Treatment" sub="Recorded in the audit trail when saved.">
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+            {TREATMENTS.map(t => <FilterChip key={t} active={f.treatment === t} onClick={() => set({ treatment: t })} label={t} />)}
+          </div>
+          <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.45, marginBottom: 12 }}>{TREATMENT_HINT[f.treatment]}</div>
+          <div style={{ display: "grid", gridTemplateColumns: T.mobile ? "1fr" : "1.5fr 1fr", gap: 12 }}>
+            <div>
+              <label style={labelStyle(T)}>Risk owner</label>
+              <select style={fieldStyle(T)} value={f.owner} onChange={e => set({ owner: e.target.value })}>
+                {POLICY_ROLES.map(r => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle(T)}>Next review</label>
+              <input type="date" style={fieldStyle(T)} value={f.reviewOn} onChange={e => set({ reviewOn: e.target.value })} />
+            </div>
+          </div>
+          {f.treatment === "Accept" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12, border: `1px solid ${T.warnBox.border}`, background: T.warnBox.bg, borderRadius: 9, padding: 12 }}>
+              <div style={{ fontSize: 12.5, color: T.warnBox.fg, lineHeight: 1.45 }}>Accepting leaves the residual score at {entry.residual.score}. It stays in the register and on the report.</div>
+              <div>
+                <label style={labelStyle(T)}>Justification</label>
+                <textarea rows={2} value={f.accReason} onChange={e => set({ accReason: e.target.value })} placeholder="Why is this level of risk acceptable?"
+                  style={{ ...fieldStyle(T), resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <label style={labelStyle(T)}>Accepted by</label>
+                <select style={fieldStyle(T)} value={f.accBy} onChange={e => set({ accBy: e.target.value })}>
+                  <option value="">Select approver…</option>
+                  {POLICY_ROLES.map(r => <option key={r}>{r}</option>)}
+                </select>
+                {sameOwner && <div style={{ color: T.warnBox.fg, fontSize: 12.5, marginTop: 6 }}>The approver should be independent of the risk owner.</div>}
+              </div>
+            </div>
+          )}
+          {["Transfer", "Avoid", "Mitigate"].includes(f.treatment) && (
+            <div style={{ marginTop: 12 }}>
+              <label style={labelStyle(T)}>{f.treatment === "Mitigate" ? "Notes (optional)" : "How the risk is transferred or avoided"}</label>
+              <textarea rows={2} value={f.note} onChange={e => set({ note: e.target.value })}
+                placeholder={f.treatment === "Transfer" ? "e.g. Covered by cyber insurance policy and vendor indemnity" : f.treatment === "Avoid" ? "e.g. Agent restricted to read-only access" : "Plan, tickets or dependencies"}
+                style={{ ...fieldStyle(T), resize: "vertical", fontFamily: "inherit" }} />
+            </div>
+          )}
+          <button disabled={!valid} onClick={save} style={{
+            marginTop: 14, width: "100%", background: valid ? T.blue : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
+            border: "none", borderRadius: 9, padding: "11px 16px", fontSize: 14.5, fontWeight: 700, cursor: valid ? "pointer" : "not-allowed",
+          }}>Save treatment</button>
+        </DrawerSection>
+      </div>
+    </div>
+  );
+}
+
+function RiskRegister({ register, treatments, onOpen }) {
+  const T = useT();
+  const [cat, setCat] = useState("all");
+  const [lvl, setLvl] = useState("all");
+  const [cell, setCell] = useState(null);
+  const tr = s => treatments[s.id] || defaultTreatment(s);
+
+  const inCat = (s, c = cat) => c === "all" || s.category === c;
+  const inLvl = (s, v = lvl) => v === "all" || riskLevel(s.residual.score) === v;
+  const inCell = s => !cell || (s[cell.key].l === cell.l && s[cell.key].i === cell.i);
+  const shown = register.filter(s => inCat(s) && inLvl(s) && inCell(s)).sort((a, b) => b.residual.score - a.residual.score || b.inherent.score - a.inherent.score);
+
+  const sumI = register.reduce((n, s) => n + s.inherent.score, 0), sumR = register.reduce((n, s) => n + s.residual.score, 0);
+  const highCrit = register.filter(s => s.residual.score >= 10).length;
+  const accepted = register.filter(s => tr(s).treatment === "Accept").length;
+  const cats = RISK_CATEGORIES.filter(c => register.some(s => s.category === c));
+
+  const exportCsv = () => downloadFile("argus-risk-register.csv", toCSV([
+    ["ID", "Category", "Scenario", "Affected agents", "Inherent L", "Inherent I", "Inherent score", "Residual L", "Residual I", "Residual score", "Residual level", "Target score", "Mitigating controls", "Treatment", "Owner", "Next review", "Accepted by", "Acceptance reason", "References"],
+    ...register.map(s => {
+      const t = tr(s);
+      return [s.id, s.category, s.title, s.agents.map(a => a.name).join("; "), s.inherent.l, s.inherent.i, s.inherent.score, s.residual.l, s.residual.i, s.residual.score, riskLevel(s.residual.score),
+        s.target.score, s.controls.map(c => c.id).join("; "), t.treatment, t.owner, t.reviewOn, t.acceptance?.by || "", t.acceptance?.reason || "", s.refs.join("; ")];
+    }),
+  ]), "text/csv;charset=utf-8");
+
+  const stats = [
+    ["Scenarios assessed", register.length, T.text],
+    ["High or critical residual", highCrit, highCrit ? (T.isDark ? "#f43f5e" : "#e11d48") : T.text],
+    ["Risk reduced by controls", `${sumI ? Math.round((1 - sumR / sumI) * 100) : 0}%`, T.isDark ? "#34d399" : "#059669"],
+    ["Accepted risks", accepted, T.text],
+  ];
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${T.mobile ? 140 : 180}px, 1fr))`, gap: T.mobile ? 10 : 14 }}>
+        {stats.map(([l, v, c]) => (
+          <Card key={l} style={{ padding: T.mobile ? "12px 14px" : "16px 18px" }}>
+            <div style={{ color: T.dim, fontSize: 12.5 }}>{l}</div>
+            <div style={{ fontSize: T.mobile ? 22 : 26, fontWeight: 800, color: c, marginTop: 4 }}>{v}</div>
+          </Card>
+        ))}
+      </div>
+
+      <Card style={{ padding: T.mobile ? 14 : 20, marginTop: 16 }}>
+        <div style={{ display: "flex", gap: T.mobile ? 18 : 30, flexWrap: "wrap" }}>
+          <RiskMatrix items={register} scoreKey="inherent" title="Inherent risk (before controls)" cell={cell} onCell={setCell} />
+          <RiskMatrix items={register} scoreKey="residual" title="Residual risk (with current controls)" cell={cell} onCell={setCell} />
+        </div>
+        <div style={{ fontSize: 12, color: T.faint, marginTop: 10, lineHeight: 1.5 }}>
+          Each scenario is plotted at its worst case across affected agents. Select a cell to filter the register. Bands: {RISK_BANDS}.
+        </div>
+      </Card>
+
+      <div style={{ ...chipRow(T.mobile), marginTop: 18 }}>
+        {[["all", "All categories"], ...cats.map(c => [c, c])].map(([id, label]) => (
+          <FilterChip key={id} active={cat === id} onClick={() => setCat(id)} label={label} count={register.filter(s => inCat(s, id) && inLvl(s) && inCell(s)).length} />
+        ))}
+      </div>
+      <div style={{ ...chipRow(T.mobile), marginTop: 8 }}>
+        {[["all", "Any residual level"], ["CRITICAL", "Critical"], ["HIGH", "High"], ["MEDIUM", "Medium"], ["LOW", "Low"]].map(([id, label]) => (
+          <FilterChip key={id} active={lvl === id} onClick={() => setLvl(id)} label={label} count={register.filter(s => inCat(s) && inLvl(s, id) && inCell(s)).length} />
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "12px 0 14px", color: T.faint, fontSize: 13 }}>
+        <span>Showing {shown.length} of {register.length} scenarios</span>
+        {(cat !== "all" || lvl !== "all" || cell) && <button onClick={() => { setCat("all"); setLvl("all"); setCell(null); }} style={{ background: "none", border: "none", color: T.blue, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>Clear filters</button>}
+        <button onClick={exportCsv} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <FileSpreadsheet size={14} /> Export register (CSV)
+        </button>
+      </div>
+
+      {T.mobile ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {shown.map(s => {
+            const t = tr(s);
+            return (
+              <Card key={s.id} onClick={() => onOpen(s.id)} style={{ padding: "13px 14px", cursor: "pointer" }}>
+                <div style={{ fontSize: 12, color: T.faint, fontFamily: "ui-monospace, monospace" }}>{s.id} · {s.category}</div>
+                <div style={{ fontSize: 14.5, fontWeight: 700, marginTop: 3, lineHeight: 1.35 }}>{s.title}</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+                  <RiskScore s={s.inherent} /><ArrowRight size={12} color={T.faint} /><RiskScore s={s.residual} />
+                  <span style={{ fontSize: 12, color: T.faint, marginLeft: "auto" }}>{s.agents.length} agent{s.agents.length === 1 ? "" : "s"}</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: T.dim, marginTop: 7 }}>{t.treatment === "Accept" ? "Accepted" : t.treatment} · {t.owner}</div>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <Card style={{ overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
+              <thead>
+                <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 13, textAlign: "left" }}>
+                  {["Risk scenario", "Agents", "Inherent", "Residual", "Target", "Treatment", "Owner"].map(h => <th key={h} style={{ padding: "12px 14px", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map(s => {
+                  const t = tr(s);
+                  return (
+                    <tr key={s.id} onClick={() => onOpen(s.id)} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer" }}>
+                      <td style={{ padding: "12px 14px", maxWidth: 360 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}><span style={{ color: T.faint, fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{s.id}</span> {s.title}</div>
+                        <div style={{ fontSize: 12, color: T.faint, marginTop: 2 }}>{s.category}</div>
+                      </td>
+                      <td style={{ padding: "12px 14px", fontSize: 13.5 }} title={s.agents.map(a => a.name).join(", ")}>{s.agents.length}</td>
+                      <td style={{ padding: "12px 14px" }}><RiskScore s={s.inherent} /></td>
+                      <td style={{ padding: "12px 14px" }}><RiskScore s={s.residual} /></td>
+                      <td style={{ padding: "12px 14px" }}><RiskScore s={s.target} /></td>
+                      <td style={{ padding: "12px 14px", fontSize: 13.5 }}>
+                        {t.treatment === "Accept" ? <Pill small fg={T.warnBox.fg} bg={T.warnBox.bg} border={T.warnBox.border}>Accepted</Pill> : t.treatment}
+                      </td>
+                      <td style={{ padding: "12px 14px", fontSize: 13, color: T.dim }}>{t.owner}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// The next step that would move a requirement toward "Met"
+const gapNextStep = (row, policies) => {
+  const mapped = row.policies.map(p => controlStatus(p.id, policies)).find(c => c.state !== "active");
+  if (mapped) return mapped;
+  const rec = recommendationFor(row.key);
+  if (rec) { const c = controlStatus(rec.id, policies); if (c.state !== "active") return c; }
+  return null;
+};
+
+function GapAssessment({ gap, policies, actions, onGapField, onMarkNA }) {
+  const T = useT();
+  const [fw, setFw] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [naFor, setNaFor] = useState(null);
+  const [naReason, setNaReason] = useState("");
+  const rows = gap.flatMap(f => f.rows);
+  const inFw = (r, v = fw) => v === "all" || r.framework.id === v;
+  const inSt = (r, v = status) => v === "all" || r.status === v;
+  const shown = rows.filter(r => inFw(r) && inSt(r));
+  const totals = st => rows.filter(r => r.status === st).length;
+  const applicable = rows.length - totals("Not applicable");
+  const overall = applicable ? Math.round(((totals("Met") + totals("Partially met") * 0.5) / applicable) * 100) : 0;
+  const GS = GAP_STYLE(T);
+
+  const exportCsv = () => downloadFile("argus-gap-assessment.csv", toCSV([
+    ["Framework", "Requirement ID", "Requirement", "Status", "Basis", "Mapped controls", "Recommended control", "Remediation owner", "Target date", "Not applicable reason"],
+    ...rows.map(r => [r.framework.name, r.id, r.title, r.status, r.basis, r.policies.map(p => p.name).join("; "),
+      recommendationFor(r.key)?.name || "", r.owner || (r.status === "Not met" || r.status === "Partially met" ? recommendationFor(r.key)?.owner || "" : ""), r.due, r.na?.reason || ""]),
+  ]), "text/csv;charset=utf-8");
+
+  const remediation = r => {
+    if (r.status !== "Not met" && r.status !== "Partially met") return null;
+    const suggested = recommendationFor(r.key)?.owner || "";
+    const next = gapNextStep(r, policies);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <select aria-label={`Remediation owner for ${r.framework.short} ${r.id}`} value={r.owner || suggested} onChange={e => onGapField(r.key, "owner", e.target.value)}
+            style={{ ...fieldStyle(T), width: "auto", flex: "1 1 170px", padding: "6px 8px", fontSize: 12.5 }}>
+            <option value="">Assign owner…</option>
+            {POLICY_ROLES.map(o => <option key={o}>{o}</option>)}
+          </select>
+          <input type="date" aria-label={`Target date for ${r.framework.short} ${r.id}`} value={r.due} onChange={e => onGapField(r.key, "due", e.target.value)}
+            style={{ ...fieldStyle(T), width: "auto", flex: "0 1 140px", padding: "6px 8px", fontSize: 12.5 }} />
+        </div>
+        {next && <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}><ControlPill c={next} /><ControlAction c={next} actions={actions} /></div>}
+      </div>
+    );
+  };
+
+  const naControl = r => {
+    if (!r.fwInScope) return null;
+    if (r.na) return <button onClick={() => onMarkNA(r.key, null)} style={{ background: "none", border: "none", color: T.blue, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>Mark applicable again</button>;
+    if (r.status === "Met") return null;
+    if (naFor === r.key) return (
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+        <input autoFocus value={naReason} onChange={e => setNaReason(e.target.value)} placeholder="Reason (required, logged)" style={{ ...fieldStyle(T), flex: "1 1 180px", padding: "6px 8px", fontSize: 12.5 }} />
+        <button disabled={!naReason.trim()} onClick={() => { onMarkNA(r.key, naReason.trim()); setNaFor(null); setNaReason(""); }} style={{ fontSize: 12.5, fontWeight: 700, padding: "6px 10px", borderRadius: 7, border: "none", background: naReason.trim() ? T.blue : "rgba(148,163,184,.25)", color: naReason.trim() ? "#fff" : T.faint, cursor: naReason.trim() ? "pointer" : "not-allowed" }}>Save</button>
+        <button onClick={() => { setNaFor(null); setNaReason(""); }} style={{ fontSize: 12.5, padding: "6px 10px", borderRadius: 7, border: `1px solid ${T.border}`, background: "transparent", color: T.dim, cursor: "pointer" }}>Cancel</button>
+      </div>
+    );
+    return <button onClick={() => { setNaFor(r.key); setNaReason(""); }} style={{ background: "none", border: "none", color: T.faint, fontSize: 12.5, cursor: "pointer", padding: 0, textDecoration: "underline" }}>Mark not applicable</button>;
+  };
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${T.mobile ? 140 : 160}px, 1fr))`, gap: T.mobile ? 10 : 14 }}>
+        <Card style={{ padding: T.mobile ? "12px 14px" : "16px 18px" }}>
+          <div style={{ color: T.dim, fontSize: 12.5 }}>Gap score</div>
+          <div style={{ fontSize: T.mobile ? 22 : 26, fontWeight: 800, color: coverageColor(T, overall), marginTop: 4 }}>{overall}%</div>
+        </Card>
+        {GAP_STATUS.map(st => (
+          <Card key={st} onClick={() => setStatus(status === st ? "all" : st)} style={{ padding: T.mobile ? "12px 14px" : "16px 18px", cursor: "pointer", borderColor: status === st ? GS[st].fg : T.border }}>
+            <div style={{ color: T.dim, fontSize: 12.5 }}>{st}</div>
+            <div style={{ fontSize: T.mobile ? 22 : 26, fontWeight: 800, color: GS[st].fg, marginTop: 4 }}>{totals(st)}</div>
+          </Card>
+        ))}
+      </div>
+      <div style={{ fontSize: 12, color: T.faint, marginTop: 8, lineHeight: 1.5 }}>{GAP_SCORE_METHOD}</div>
+
+      <Card style={{ marginTop: 16, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: T.mobile ? 520 : 0 }}>
+            <thead>
+              <tr style={{ background: T.panelSoft, color: T.dim, fontSize: 12.5, textAlign: "left" }}>
+                {["Framework", "Met", "Partial", "Not met", "N/A", "Gap score"].map(h => <th key={h} style={{ padding: "10px 12px", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {gap.map(f => (
+                <tr key={f.id} onClick={() => setFw(fw === f.id ? "all" : f.id)} style={{ borderTop: `1px solid ${T.border}`, cursor: "pointer", background: fw === f.id ? T.blueSoft : "transparent" }}>
+                  <td style={{ padding: "9px 12px", fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap" }}>{f.short}</td>
+                  <td style={{ padding: "9px 12px", fontSize: 13.5, color: GS["Met"].fg }}>{f.met}</td>
+                  <td style={{ padding: "9px 12px", fontSize: 13.5, color: GS["Partially met"].fg }}>{f.partial}</td>
+                  <td style={{ padding: "9px 12px", fontSize: 13.5, color: GS["Not met"].fg }}>{f.notMet}</td>
+                  <td style={{ padding: "9px 12px", fontSize: 13.5, color: T.faint }}>{f.na}</td>
+                  <td style={{ padding: "9px 12px", minWidth: 130 }}>
+                    {f.score === null ? <span style={{ fontSize: 12.5, color: T.faint }}>Not in scope</span> : (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                        <span style={{ width: 70, height: 6, borderRadius: 99, background: T.panelSoft, border: `1px solid ${T.border}`, overflow: "hidden", display: "inline-block" }}>
+                          <span style={{ display: "block", width: `${f.score}%`, height: "100%", background: coverageColor(T, f.score) }} />
+                        </span>
+                        <b style={{ color: coverageColor(T, f.score) }}>{f.score}%</b>
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", margin: "18px 0 10px" }}>
+        <select value={fw} onChange={e => setFw(e.target.value)} aria-label="Filter by framework"
+          style={{ ...fieldStyle(T), width: "auto", flex: T.mobile ? "1 1 100%" : "0 1 280px", background: fw === "all" ? T.panel : T.blueSoft, borderColor: fw === "all" ? T.border : T.blue }}>
+          <option value="all">All frameworks ({rows.filter(r => inSt(r)).length})</option>
+          {gap.map(f => <option key={f.id} value={f.id}>{f.name} ({f.rows.filter(r => inSt(r)).length})</option>)}
+        </select>
+        <div style={{ ...chipRow(T.mobile), flex: 1 }}>
+          {[["all", "Any status"], ...GAP_STATUS.map(s => [s, s])].map(([id, label]) => (
+            <FilterChip key={id} active={status === id} onClick={() => setStatus(id)} label={label} count={rows.filter(r => inFw(r) && inSt(r, id)).length} />
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14, color: T.faint, fontSize: 13 }}>
+        <span>Showing {shown.length} of {rows.length} requirements</span>
+        {(fw !== "all" || status !== "all") && <button onClick={() => { setFw("all"); setStatus("all"); }} style={{ background: "none", border: "none", color: T.blue, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>Clear filters</button>}
+        <button onClick={exportCsv} style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <FileSpreadsheet size={14} /> Export gap assessment (CSV)
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {shown.map(r => (
+          <Card key={r.key} style={{ padding: "12px 14px", display: "grid", gridTemplateColumns: T.mobile ? "1fr" : "minmax(0,1.3fr) minmax(0,1fr)", gap: T.mobile ? 10 : 18, alignItems: "start" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, color: T.faint }}>{r.framework.short}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: T.blue, fontFamily: "ui-monospace, monospace" }}>{r.id}</span>
+                <GapPill status={r.status} />
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4, marginTop: 4 }}>{r.title}</div>
+              <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.45, marginTop: 4 }}>{r.basis}</div>
+              <div style={{ marginTop: 6 }}>{naControl(r)}</div>
+            </div>
+            <div>{remediation(r)}</div>
+          </Card>
+        ))}
+        {shown.length === 0 && <Card style={{ padding: 28, textAlign: "center", color: T.faint }}>No requirements match these filters.</Card>}
+      </div>
+    </div>
+  );
+}
+
+function ReportBody({ scored, register, gap, treatments, policies, today }) {
+  const T = useT();
+  const tr = s => treatments[s.id] || defaultTreatment(s);
+  const rows = gap.flatMap(f => f.rows);
+  const count = st => rows.filter(r => r.status === st).length;
+  const applicable = rows.length - count("Not applicable");
+  const overall = applicable ? Math.round(((count("Met") + count("Partially met") * 0.5) / applicable) * 100) : 0;
+  const lvls = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+  const top = [...register].sort((a, b) => b.residual.score - a.residual.score).slice(0, 8);
+  const accepted = register.filter(s => tr(s).treatment === "Accept");
+  const notMet = rows.filter(r => r.status === "Not met").slice(0, 12);
+  const th = { padding: "6px 8px", textAlign: "left", fontSize: 11.5, fontWeight: 700, color: T.dim, borderBottom: `1.5px solid ${T.text}` };
+  const td = { padding: "6px 8px", fontSize: 12, borderBottom: `1px solid ${T.border}`, verticalAlign: "top" };
+  const H2 = ({ children }) => <h2 style={{ fontSize: 15, fontWeight: 800, margin: "22px 0 8px", color: T.text, breakAfter: "avoid" }}>{children}</h2>;
+  const lvlName = l => l[0] + l.slice(1).toLowerCase();
+
+  return (
+    <div style={{ color: T.text, fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif", fontSize: 12.5, lineHeight: 1.5 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, borderBottom: `2px solid ${T.text}`, paddingBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: T.blue }}>ARGUS</div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, margin: "4px 0 2px" }}>AI Risk and Gap Assessment</h1>
+          <div style={{ color: T.dim }}>Point-in-time report · {today}</div>
+        </div>
+        <PanoptesMark size={40} color={T.text} />
+      </div>
+      <div style={{ fontSize: 11.5, color: T.dim, marginTop: 8 }}>
+        Scope: {scored.length} AI agents, {gap.length} frameworks, {register.length} risk scenarios. Demo environment: all agents, events and evidence are synthetic.
+      </div>
+
+      <H2>Summary</H2>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+        {[["Gap score", `${overall}%`], ["Requirements not met", count("Not met")], ["High or critical residual risks", register.filter(s => s.residual.score >= 10).length], ["Agents rated high or critical", scored.filter(a => a.risk === "HIGH" || a.risk === "CRITICAL").length]].map(([l, v]) => (
+          <div key={l} style={{ border: `1px solid ${T.border}`, borderRadius: 6, padding: "8px 10px" }}>
+            <div style={{ fontSize: 10.5, color: T.dim }}>{l}</div>
+            <div style={{ fontSize: 19, fontWeight: 800 }}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <p style={{ margin: "10px 0 0" }}>
+        Of {applicable} applicable requirements, {count("Met")} are met, {count("Partially met")} partially met and {count("Not met")} not met.
+        Residual risk across {register.length} scenarios: {lvls.map(l => `${register.filter(s => riskLevel(s.residual.score) === l).length} ${lvlName(l).toLowerCase()}`).join(", ")}.
+        {accepted.length ? ` ${accepted.length} risk${accepted.length > 1 ? "s have" : " has"} been formally accepted.` : " No risks have been formally accepted."}
+      </p>
+
+      <H2>Gap status by framework</H2>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr>{["Framework", "Met", "Partial", "Not met", "N/A", "Gap score"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+        <tbody>{gap.map(f => (
+          <tr key={f.id}><td style={td}>{f.name}</td><td style={td}>{f.met}</td><td style={td}>{f.partial}</td><td style={td}>{f.notMet}</td><td style={td}>{f.na}</td><td style={{ ...td, fontWeight: 700 }}>{f.score === null ? "Not in scope" : `${f.score}%`}</td></tr>
+        ))}</tbody>
+      </table>
+
+      <H2>Highest residual risks</H2>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr>{["ID", "Scenario", "Worst affected agent", "Inherent", "Residual", "Target", "Treatment"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+        <tbody>{top.map(s => (
+          <tr key={s.id}>
+            <td style={td}>{s.id}</td><td style={td}>{s.title}</td><td style={td}>{s.worstAgent}</td>
+            <td style={td}>{s.inherent.score} {lvlName(riskLevel(s.inherent.score))}</td>
+            <td style={{ ...td, fontWeight: 700 }}>{s.residual.score} {lvlName(riskLevel(s.residual.score))}</td>
+            <td style={td}>{s.target.score}</td><td style={td}>{tr(s).treatment}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+
+      <H2>Agent risk scores</H2>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr>{["Agent", "Status", "Score", "Level", "Highest residual risks", "Violations"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+        <tbody>{[...scored].sort((a, b) => b.score - a.score).map(a => (
+          <tr key={a.id}>
+            <td style={td}>{a.name}</td><td style={td}>{a.status}</td><td style={{ ...td, fontWeight: 700 }}>{a.score}</td><td style={td}>{lvlName(a.risk)}</td>
+            <td style={td}>{a.scoreBreakdown.top.join(", ")}</td><td style={td}>{a.scoreBreakdown.crit} critical, {a.scoreBreakdown.warn} warning</td>
+          </tr>
+        ))}</tbody>
+      </table>
+
+      <H2>Priority remediation</H2>
+      {notMet.length === 0 ? <p>No requirements are currently not met.</p> : (
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr>{["Requirement", "Gap", "Recommended control", "Owner", "Target date"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+          <tbody>{notMet.map(r => {
+            const rec = recommendationFor(r.key);
+            return (
+              <tr key={r.key}>
+                <td style={td}><b>{r.framework.short} {r.id}</b><br />{r.title}</td><td style={td}>{r.basis}</td>
+                <td style={td}>{rec?.name || (r.policies[0] ? `Enable ${r.policies[0].name}` : "Define a control")}</td>
+                <td style={td}>{r.owner || rec?.owner || "Unassigned"}</td><td style={td}>{r.due || "Not set"}</td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      )}
+
+      {accepted.length > 0 && (
+        <>
+          <H2>Accepted risks</H2>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>{["ID", "Scenario", "Residual", "Accepted by", "Date", "Justification"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+            <tbody>{accepted.map(s => {
+              const t = tr(s);
+              return <tr key={s.id}><td style={td}>{s.id}</td><td style={td}>{s.title}</td><td style={td}>{s.residual.score}</td><td style={td}>{t.acceptance?.by}</td><td style={td}>{t.acceptance?.on}</td><td style={td}>{t.acceptance?.reason}</td></tr>;
+            })}</tbody>
+          </table>
+        </>
+      )}
+
+      <H2>Methodology</H2>
+      <ul style={{ margin: 0, paddingLeft: 18 }}>
+        <li>Risk scenarios follow a {RISK_CATEGORIES.length}-category AI risk taxonomy and are mapped to OWASP, MITRE ATLAS, NIST AI RMF and applicable regulations.</li>
+        <li>Each scenario is scored likelihood × impact on 5-point scales. Inherent risk is before controls; residual risk credits only controls that are enabled, approved, in scope for the agent and not violated by it; target risk assumes every mapped control is in place. Bands: {RISK_BANDS}.</li>
+        <li>Agent risk score: {AGENT_SCORE_METHOD}</li>
+        <li>Requirement status: Met needs an always-on platform capability or an approved, enabled policy with evidence on file. An approved policy without evidence, or a draft, is Partially met. {GAP_SCORE_METHOD}</li>
+      </ul>
+      <div style={{ marginTop: 18, paddingTop: 8, borderTop: `1px solid ${T.border}`, fontSize: 10.5, color: T.faint }}>Generated by ARGUS · {today}</div>
+    </div>
+  );
+}
+
+function AssessmentReport(props) {
+  const T = useT();
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const paper = { ...THEMES.light, mobile: T.mobile };
+  return (
+    <div>
+      <style>{`
+        .argus-print-portal { display: none; }
+        @media print {
+          #root { display: none !important; }
+          .argus-print-portal { display: block !important; }
+          html, body { background: #fff !important; }
+          @page { margin: 14mm; }
+          tr { break-inside: avoid; }
+        }
+      `}</style>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ fontSize: 13.5, color: T.dim, flex: "1 1 300px", lineHeight: 1.5 }}>
+          A point-in-time summary of the risk register and gap assessment, ready to share with leadership or auditors.
+        </div>
+        <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: 8, background: T.blue, border: "none", color: "#fff", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          <Printer size={15} /> Print or save as PDF
+        </button>
+      </div>
+      <ThemeCtx.Provider value={paper}>
+        <div style={{ background: "#fff", borderRadius: 10, border: `1px solid ${T.border}`, padding: T.mobile ? 16 : 36, overflowX: "auto" }}>
+          <div style={{ minWidth: T.mobile ? 640 : 0 }}><ReportBody {...props} today={today} /></div>
+        </div>
+        {createPortal(<div className="argus-print-portal"><ReportBody {...props} today={today} /></div>, document.body)}
+      </ThemeCtx.Provider>
+    </div>
+  );
+}
+
+function Assessments({ scored, register, gap, policies, audit, treatments, actions, onSaveTreatment, onGapField, onMarkNA, onOpenAgent }) {
+  const T = useT();
+  const [tab, setTab] = useState("risk");
+  const [openId, setOpenId] = useState(null);
+  const entry = openId && register.find(s => s.id === openId);
+  return (
+    <div>
+      <PageHeader title="Risk & Gap Assessment" subtitle="AI risk register scored for inherent, residual and target risk, a requirement-by-requirement gap assessment across every framework, and a report you can share." />
+      <div style={{ margin: "18px 0" }}>
+        <SegTabs value={tab} onChange={setTab} tabs={[["risk", "Risk register", <Grid3x3 size={14} key="i" />], ["gap", "Gap assessment", <ClipboardCheck size={14} key="i" />], ["report", "Report", <FileText size={14} key="i" />]]} />
+      </div>
+      {tab === "risk" && <RiskRegister register={register} treatments={treatments} onOpen={setOpenId} />}
+      {tab === "gap" && <GapAssessment gap={gap} policies={policies} actions={actions} onGapField={onGapField} onMarkNA={onMarkNA} />}
+      {tab === "report" && <AssessmentReport scored={scored} register={register} gap={gap} treatments={treatments} policies={policies} />}
+      {entry && (
+        <RiskScenarioDrawer key={entry.id} entry={entry} treatment={treatments[entry.id] || defaultTreatment(entry)} policies={policies} audit={audit} actions={actions}
+          onSave={(id, t) => { onSaveTreatment(id, t); setOpenId(null); }} onClose={() => setOpenId(null)} onOpenAgent={name => { setOpenId(null); onOpenAgent(name); }} />
+      )}
+    </div>
+  );
+}
 
 /* ---------------- shell ---------------- */
 
@@ -1910,6 +3150,12 @@ export default function ArgusMVP() {
   const [navOpen, setNavOpen] = useState(false);
 
   const coverage = useMemo(() => computeCoverage(reqMap, policies), [reqMap, policies]);
+  const [treatments, setTreatments] = useState({});
+  const [gapOverrides, setGapOverrides] = useState({});
+  // agent risk scores, the risk register and the gap assessment are all derived from current state
+  const scored = useMemo(() => agents.map(a => ({ ...a, ...scoreAgent(a, policies, audit) })), [agents, policies, audit]);
+  const register = useMemo(() => buildRegister(scored), [scored]);
+  const gap = useMemo(() => gapAssessment(reqMap, policies, scored, gapOverrides), [reqMap, policies, scored, gapOverrides]);
   const openFramework = fwOpen ? coverage.frameworks.find(f => f.id === fwOpen) : null;
   const gapKeys = useMemo(() => new Set(
     coverage.frameworks.flatMap(f => f.reqs.filter(q => !q.covered).map(q => q.key))
@@ -1935,6 +3181,8 @@ export default function ArgusMVP() {
     setPolicies(SEED_POLICIES);
     setAudit(SEED_AUDIT);
     setReqMap(SEED_REQ_MAP);
+    setTreatments({});
+    setGapOverrides({});
     setDetailId(null);
     setFwOpen(null);
     setModal(null);
@@ -2069,6 +3317,37 @@ export default function ArgusMVP() {
       : `Saved as draft.${closing.length ? ` Approve it to close ${closing.length} gap${closing.length === 1 ? "" : "s"}.` : ""}`);
   };
 
+  const actions = { createPolicy: openCreatePolicy, approve: setApproving, togglePolicy };
+
+  const saveTreatment = (sid, t) => {
+    const sc = register.find(x => x.id === sid);
+    setTreatments(m => ({ ...m, [sid]: t }));
+    if (t.treatment === "Accept") {
+      log("warn", "Risk Accepted", "—", `${sid} ${sc?.title}: residual risk ${sc?.residual.score} accepted by ${t.acceptance.by} (owner: ${t.owner}, review ${t.reviewOn}). Justification: ${t.acceptance.reason}`);
+    } else {
+      log("info", "Risk Treatment", "—", `${sid} ${sc?.title}: treatment set to ${t.treatment} (owner: ${t.owner}, review ${t.reviewOn})${t.note ? `. ${t.note}` : ""}`);
+    }
+    notify(t.treatment === "Accept" ? `${sid} accepted` : `${sid} treatment saved`);
+  };
+
+  const setGapField = (key, field, value) => {
+    setGapOverrides(o => ({ ...o, [key]: { ...(o[key] || {}), [field]: value } }));
+    if (field === "owner" && value) {
+      const [fwId, i] = key.split("|");
+      const fw = FRAMEWORKS.find(f => f.id === fwId);
+      log("info", "Remediation Assigned", "—", `${fw.short} ${fw.requirements[Number(i)].id} remediation assigned to ${value}`);
+    }
+  };
+
+  const markNA = (key, reason) => {
+    const [fwId, i] = key.split("|");
+    const fw = FRAMEWORKS.find(f => f.id === fwId);
+    const label = `${fw.short} ${fw.requirements[Number(i)].id}`;
+    setGapOverrides(o => ({ ...o, [key]: { ...(o[key] || {}), na: reason ? { reason, on: new Date().toISOString().slice(0, 10) } : null } }));
+    log(reason ? "warn" : "info", "Scope Change", "—", reason ? `${label} marked not applicable: ${reason}` : `${label} marked applicable again`);
+    notify(reason ? `${label} marked not applicable` : `${label} back in scope`);
+  };
+
   const go = id => { setView(id); setNavOpen(false); };
 
   const NAV = [
@@ -2076,12 +3355,13 @@ export default function ArgusMVP() {
     { id: "registry", label: "Agent Registry", icon: <Users size={17} /> },
     { id: "policy", label: "Policy Engine", icon: <FileText size={17} /> },
     { id: "frameworks", label: "Frameworks", icon: <Layers size={17} /> },
+    { id: "assessments", label: "Risk & Gaps", icon: <ClipboardCheck size={17} /> },
     { id: "audit", label: "Audit Trail", icon: <ScanSearch size={17} /> },
     { id: "heatmap", label: "Risk Radar", icon: <AlertTriangle size={17} /> },
   ];
 
   const globalHits = globalQ.trim()
-    ? agents.filter(a => a.name.toLowerCase().includes(globalQ.toLowerCase()))
+    ? scored.filter(a => a.name.toLowerCase().includes(globalQ.toLowerCase()))
     : [];
 
   const sidebar = (
@@ -2205,12 +3485,14 @@ export default function ArgusMVP() {
           </header>
 
           <main style={{ padding: mobile ? "18px 16px 96px" : 28, minWidth: 0 }}>
-            {view === "dashboard" && <Dashboard agents={agents} coverage={coverage} openAgent={openAgent} onOpenFrameworks={() => go("frameworks")} />}
-            {view === "registry" && <Registry agents={agents} policies={policies} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
+            {view === "dashboard" && <Dashboard agents={scored} coverage={coverage} openAgent={openAgent} onOpenFrameworks={() => go("frameworks")} />}
+            {view === "registry" && <Registry agents={scored} policies={policies} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
             {view === "policy" && <PolicyEngine policies={policies} reqMap={reqMap} toggle={togglePolicy} onOpenCreate={() => openCreatePolicy()} onApprove={setApproving} />}
             {view === "frameworks" && <Frameworks coverage={coverage} gapKeys={gapKeys} policies={policies} onOpen={setFwOpen} onAdopt={adoptRecommendation} />}
             {view === "audit" && <AuditTrail audit={audit} />}
-            {view === "heatmap" && <Heatmap agents={agents} openAgent={openAgent} />}
+            {view === "heatmap" && <Heatmap agents={scored} openAgent={openAgent} />}
+            {view === "assessments" && <Assessments scored={scored} register={register} gap={gap} policies={policies} audit={audit} treatments={treatments}
+              actions={actions} onSaveTreatment={saveTreatment} onGapField={setGapField} onMarkNA={markNA} onOpenAgent={openAgent} />}
           </main>
         </div>
 
@@ -2220,9 +3502,8 @@ export default function ArgusMVP() {
         {approving && policies.find(p => p.id === approving) && (
           <ApprovePolicyModal policy={policies.find(p => p.id === approving)} onClose={() => setApproving(null)} onApprove={approvePolicy} />
         )}
-        <AgentDrawer key={detailId ?? "none"} agent={agents.find(a => a.id === detailId)} audit={audit} policies={policies}
-          onClose={() => setDetailId(null)} onUpdateTraits={updateTraits} onExclude={excludeMapping} onInclude={includeMapping}
-          onCreatePolicy={openCreatePolicy} onApprove={setApproving} onTogglePolicy={togglePolicy} />
+        <AgentDrawer key={detailId ?? "none"} agent={scored.find(a => a.id === detailId)} audit={audit} policies={policies} actions={actions}
+          onClose={() => setDetailId(null)} onUpdateTraits={updateTraits} onExclude={excludeMapping} onInclude={includeMapping} />
         <FrameworkDrawer framework={openFramework} policies={policies} gapKeys={gapKeys} onClose={() => setFwOpen(null)}
           onLink={linkPolicy} onTogglePolicy={togglePolicy} onAdopt={adoptRecommendation} onApprove={setApproving} />
 

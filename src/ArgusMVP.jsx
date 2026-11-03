@@ -18,6 +18,7 @@ import {
   riskLevel, scoreAgent, buildRegister, gapAssessment,
 } from "./riskLibrary.js";
 import { LANES, COMPONENT_TYPES, AGBOM_SECTION, buildArchitecture, toAgBOM } from "./architecture.js";
+import { lifecycle, requirements, nextStep, CONDITION_MAX_DAYS, PROBATION_DAYS } from "./lifecycle.js";
 
 /* ---------------- seed data ---------------- */
 
@@ -37,7 +38,8 @@ const SEED_AGENTS = [
     traits: tr("consequential", "customerFacing", "personalData", "euScope"), exclusions: {} },
   { id: 5, name: "FinanceBot Alpha", model: "gpt-4o", dept: "Finance", status: "suspended", autonomy: "Full autonomy", owner: "FP&A",
     desc: "Automates accounts-payable reconciliation and vendor follow-ups, including emailing vendors about invoices and payment status. Suspended after repeated policy violations.",
-    traits: tr("personalData", "euScope", "financialData", "externalComms", "tools"), exclusions: {} },
+    traits: tr("personalData", "euScope", "financialData", "externalComms", "tools"), exclusions: {},
+    suspension: { on: "5/21/2026, 10:53 AM", by: "Auto-Suspend Rogue Agents policy", reason: "3 critical policy violations within 6 hours", autonomy: "Full autonomy" } },
   { id: 6, name: "MarketSentinel", model: "claude-3-5-sonnet", dept: "Marketing", status: "active", autonomy: "Supervised", owner: "Growth",
     desc: "Monitors competitor news and social channels, summarizes trends, and drafts campaign copy that marketers review before publishing.",
     traits: tr("externalComms", "tools", "retrieval", "sharedOutput"), exclusions: {} },
@@ -77,12 +79,12 @@ const SEED_POLICIES = [
 const SEED_AUDIT = [
   { sev: "info", ts: "11/2/2026, 3:10:00 PM", type: "Agent Registered", agent: "ClaimsGuide", desc: "ClaimsGuide registered and pending security review before activation" },
   { sev: "info", ts: "11/2/2026, 3:05:00 PM", type: "Agent Registered", agent: "JobFit", desc: "JobFit registered and pending security review before activation" },
-  { sev: "critical", ts: "5/21/2026, 11:42:25 AM", type: "Policy Violation", agent: "ThreatWatch AI", policy: "p8", desc: "ThreatWatch AI exceeded external API rate limit — 1,247 calls in 60 minutes" },
-  { sev: "critical", ts: "5/21/2026, 10:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p1", desc: "FinanceBot Alpha accessed 3,400 EU customer PII records without GDPR deletion check" },
-  { sev: "warn", ts: "5/21/2026, 8:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p2", desc: "FinanceBot Alpha sent outbound emails to external vendors without approval" },
-  { sev: "critical", ts: "5/21/2026, 5:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p3", desc: "FinanceBot Alpha attempted to access HIPAA-tagged records without clearance" },
+  { id: "v1", sev: "critical", ts: "5/21/2026, 11:42:25 AM", type: "Policy Violation", agent: "ThreatWatch AI", policy: "p8", desc: "ThreatWatch AI exceeded external API rate limit — 1,247 calls in 60 minutes" },
+  { sev: "critical", ts: "5/21/2026, 10:53:25 AM", type: "Agent Suspended", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha suspended automatically by Auto-Suspend Rogue Agents after 3 critical policy violations within 6 hours" },
+  { id: "v2", sev: "critical", ts: "5/21/2026, 10:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p1", desc: "FinanceBot Alpha accessed 3,400 EU customer PII records without GDPR deletion check" },
+  { id: "v3", sev: "critical", ts: "5/21/2026, 8:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p2", desc: "FinanceBot Alpha sent outbound emails to external vendors without approval" },
+  { id: "v4", sev: "critical", ts: "5/21/2026, 5:52:25 AM", type: "Policy Violation", agent: "FinanceBot Alpha", policy: "p3", desc: "FinanceBot Alpha attempted to access HIPAA-tagged records without clearance" },
   { sev: "warn", ts: "5/20/2026, 11:52:25 AM", type: "Risk Change", agent: "DataSync Pro", desc: "DataSync Pro risk score updated from 35 to 42 after new financial data permissions added" },
-  { sev: "critical", ts: "5/19/2026, 11:52:25 AM", type: "Agent Suspended", agent: "FinanceBot Alpha", desc: "FinanceBot Alpha suspended after 3 critical policy violations in 6-hour window" },
   { sev: "info", ts: "5/19/2026, 11:52:25 AM", type: "Agent Registered", agent: "LegalScan Bot", desc: "LegalScan Bot registered and pending security review before activation" },
   { sev: "warn", ts: "5/18/2026, 11:52:25 AM", type: "Risk Change", agent: "ThreatWatch AI", desc: "ThreatWatch AI risk level elevated to HIGH after external API access pattern detected" },
   { sev: "info", ts: "5/16/2026, 11:52:25 AM", type: "Status Change", agent: "CodeReview AI", desc: "CodeReview AI status changed from pending to active after security clearance" },
@@ -92,7 +94,7 @@ const SEED_AUDIT = [
 const ALERTS = [
   { sev: "critical", title: "ThreatWatch AI exceeded external API rate limit — 1,247 calls in 60 minutes", agent: "ThreatWatch AI", time: "11:42:25 AM" },
   { sev: "critical", title: "FinanceBot Alpha accessed 3,400 EU customer PII records without GDPR deletion check", agent: "FinanceBot Alpha", time: "10:52:25 AM" },
-  { sev: "warn", title: "FinanceBot Alpha sent outbound emails to external vendors without approval", agent: "FinanceBot Alpha", time: "8:52:25 AM" },
+  { sev: "critical", title: "FinanceBot Alpha sent outbound emails to external vendors without approval", agent: "FinanceBot Alpha", time: "8:52:25 AM" },
   { sev: "critical", title: "FinanceBot Alpha attempted to access HIPAA-tagged records without clearance", agent: "FinanceBot Alpha", time: "5:52:25 AM" },
   { sev: "warn", title: "DataSync Pro risk score updated from 35 to 42 after new financial data permissions added", agent: "DataSync Pro", time: "11:52:25 AM" },
 ];
@@ -788,7 +790,8 @@ function ControlsBadge({ m }) {
   );
 }
 
-function Registry({ agents, policies, openAgent, onOpenRegister }) {
+function Registry({ agents, policies, audit, treatments, openAgent, onOpenRegister }) {
+  const stepFor = a => nextStep(a, { audit, treatments });
   const T = useT();
   const [q, setQ] = useState("");
   const [risk, setRisk] = useState("all");
@@ -873,6 +876,7 @@ function Registry({ agents, policies, openAgent, onOpenRegister }) {
                 {a.desc && <div style={{ color: T.dim, fontSize: 13, lineHeight: 1.45, marginTop: 8, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{a.desc}</div>}
                 <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
                   <Pill fg={s.fg} bg={s.bg} border={s.border}>{a.status}</Pill>
+                  {stepFor(a) && <span style={{ fontSize: 11.5, color: T.faint }}>{stepFor(a)}</span>}
                   <Pill fg={r.fg} bg={r.bg} border={r.border}>{a.risk}</Pill>
                   <span style={{ marginLeft: "auto" }}><ControlsBadge m={m} /></span>
                 </div>
@@ -902,7 +906,10 @@ function Registry({ agents, policies, openAgent, onOpenRegister }) {
                         {a.desc && <div title={a.desc} style={{ color: T.dim, fontSize: 12.5, marginTop: 4, lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{a.desc}</div>}
                       </td>
                       <td style={{ padding: "14px 16px", fontSize: 14 }}>{a.dept}</td>
-                      <td style={{ padding: "14px 16px" }}><Pill fg={s.fg} bg={s.bg} border={s.border}>{a.status}</Pill></td>
+                      <td style={{ padding: "14px 16px" }}>
+                        <Pill fg={s.fg} bg={s.bg} border={s.border}>{a.status}</Pill>
+                        {stepFor(a) && <div style={{ fontSize: 11.5, color: a.status === "suspended" ? (T.isDark ? "#f43f5e" : "#e11d48") : T.faint, marginTop: 5, whiteSpace: "nowrap" }}>{stepFor(a)}</div>}
+                      </td>
                       <td style={{ padding: "14px 16px" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           {a.risk === "CRITICAL" && <ShieldAlert size={14} color={r.fg} />}
@@ -2294,6 +2301,290 @@ function AgentRiskTab({ agent, policies, audit, actions }) {
   );
 }
 
+/* ---------------- agent lifecycle (activation & reinstatement) ---------------- */
+
+const btnStyle = (T, primary = true, enabled = true) => ({
+  display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 8, whiteSpace: "nowrap",
+  border: primary ? "none" : `1px solid ${T.border}`, cursor: enabled ? "pointer" : "not-allowed",
+  background: !enabled ? "rgba(148,163,184,.25)" : primary ? T.blue : "transparent", color: !enabled ? T.faint : primary ? "#fff" : T.dim,
+});
+
+function InlineForm({ fields, submitLabel, onSubmit }) {
+  const T = useT();
+  const [v, setV] = useState(() => Object.fromEntries(fields.map(f => [f.key, ""])));
+  const ok = fields.every(f => v[f.key].trim());
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+      {fields.map(f => (
+        <input key={f.key} value={v[f.key]} onChange={e => setV(s => ({ ...s, [f.key]: e.target.value }))} placeholder={f.placeholder} aria-label={f.placeholder}
+          style={{ ...fieldStyle(T), background: T.panel, padding: "7px 9px", fontSize: 12.5 }} />
+      ))}
+      <div><button disabled={!ok} onClick={() => onSubmit(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x.trim()])))} style={btnStyle(T, true, ok)}>{submitLabel}</button></div>
+    </div>
+  );
+}
+
+function RequirementSubs({ item, agent, policies, audit, actions, life }) {
+  const T = useT();
+  const green = T.isDark ? "#34d399" : "#059669";
+  const box = { background: T.panel, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px" };
+  if (item.id === "controls") return item.subs.map(p => {
+    const c = controlStatus(p.id, policies, audit, agent.name);
+    return <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}><ControlPill c={c} /><ControlAction c={c} actions={actions} /></div>;
+  });
+  if (item.id === "risks") return item.subs.map(r => {
+    const fix = r.controls.map(c => controlStatus(c.id, policies, audit, agent.name)).find(c => c.state !== "active");
+    return (
+      <div key={r.id} style={box}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}><span style={{ color: T.faint, fontFamily: "ui-monospace, monospace", fontSize: 11.5 }}>{r.id}</span> {r.title}</span>
+          <RiskScore s={r.residual} label="Residual" />
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 7 }}>
+          {fix && <><ControlPill c={fix} /><ControlAction c={fix} actions={actions} /></>}
+          <button onClick={() => life.openRisk(r.id)} style={{ background: "none", border: "none", color: T.blue, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+            {fix ? "Or treat it in the risk register" : "Treat it in the risk register"}
+          </button>
+        </div>
+      </div>
+    );
+  });
+  if (item.id === "violations") return item.subs.map(e => <div key={e.id} style={{ ...box, fontSize: 12.5 }}>{e.desc}</div>);
+  if (item.id === "rootcause") return item.subs.map(e => {
+    const pol = controlStatus(e.policy, policies);
+    return (
+      <div key={e.id} style={box}>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <SevDot sev={e.sev} size={14} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 13, lineHeight: 1.45 }}>{e.desc}</div>
+            <div style={{ fontSize: 11.5, color: T.faint, marginTop: 2 }}>{e.ts} · broke {pol.name}</div>
+            {e.resolution ? (
+              <div style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 6 }}>
+                <div><b>Root cause:</b> <span style={{ color: T.dim }}>{e.resolution.cause}</span></div>
+                <div><b>Fix:</b> <span style={{ color: T.dim }}>{e.resolution.fix}</span></div>
+                <div style={{ color: green, fontSize: 11.5, marginTop: 2 }}>Recorded by {e.resolution.by} on {e.resolution.on}</div>
+              </div>
+            ) : (
+              <InlineForm submitLabel="Record root cause" onSubmit={v => life.rootCause(agent.id, e.id, v)} fields={[
+                { key: "cause", placeholder: "Root cause: what allowed this to happen?" },
+                { key: "fix", placeholder: "Fix applied: what was changed?" },
+              ]} />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  });
+  if (item.id === "retest") return item.subs.map(p => {
+    const pol = controlStatus(p.id, policies);
+    return (
+      <div key={p.id} style={box}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>{pol.name}</div>
+        {p.retest ? (
+          <div style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 4 }}>
+            <span style={{ color: T.dim }}>{p.retest.evidence}</span>
+            <div style={{ color: green, fontSize: 11.5, marginTop: 2 }}>Re-tested on {p.retest.on}</div>
+          </div>
+        ) : (
+          <InlineForm submitLabel="Record re-test" onSubmit={v => life.retest(agent.id, p.id, v.evidence)} fields={[
+            { key: "evidence", placeholder: "Test performed and result, e.g. ticket or test ID" },
+          ]} />
+        )}
+      </div>
+    );
+  });
+  return null;
+}
+
+function RequirementRow({ item, agent, policies, audit, actions, life, onShowTab }) {
+  const T = useT();
+  const green = T.isDark ? "#34d399" : "#059669";
+  const amber = T.isDark ? "#f59e0b" : "#b45309";
+  const showSubs = !item.met && item.subs?.length || item.id === "rootcause" || item.id === "retest";
+  return (
+    <div style={{ display: "flex", gap: 10, padding: "11px 0", borderTop: `1px solid ${T.border}` }}>
+      {item.met ? <CheckCircle2 size={17} color={green} style={{ flexShrink: 0, marginTop: 1 }} /> : <AlertCircle size={17} color={amber} style={{ flexShrink: 0, marginTop: 1 }} />}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: item.met ? T.dim : T.text }}>{item.label}</div>
+        {!item.met && <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.45, marginTop: 2 }}>{item.detail}</div>}
+        {item.met && item.attest && <div style={{ fontSize: 12, color: T.faint, marginTop: 2 }}>Confirmed by {item.attest.by} on {item.attest.on}</div>}
+        {showSubs && <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 8 }}><RequirementSubs item={item} agent={agent} policies={policies} audit={audit} actions={actions} life={life} /></div>}
+        {!item.met && item.id === "attest-arch" && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+            <button onClick={() => onShowTab("architecture")} style={btnStyle(T, false)}><Network size={13} /> Review architecture</button>
+            <button onClick={() => life.attest(agent.id, "arch")} style={btnStyle(T)}><UserCheck size={13} /> Confirm as owner</button>
+          </div>
+        )}
+        {!item.met && item.id === "attest-traits" && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, color: T.faint }}>Characteristics are listed further down this tab.</span>
+            <button onClick={() => life.attest(agent.id, "traits")} style={btnStyle(T)}><UserCheck size={13} /> Confirm as owner</button>
+          </div>
+        )}
+        {!item.met && item.id === "autonomy" && (
+          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+            <button onClick={() => life.autonomy(agent.id, "Semi-autonomous")} style={btnStyle(T)}>Reduce to semi-autonomous</button>
+            <button onClick={() => life.autonomy(agent.id, "Supervised")} style={btnStyle(T, false)}>Reduce to supervised</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ApprovalPanel({ agent, req, life }) {
+  const T = useT();
+  const [by, setBy] = useState("");
+  const [due, setDue] = useState(addDays(60));
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const activation = req.kind === "activation";
+  const maxDue = addDays(CONDITION_MAX_DAYS);
+  const byOk = by && by !== agent.owner;
+  const dueOk = due && due <= maxDue && due > addDays(0);
+  return (
+    <div style={{ marginTop: 12, background: T.panel, border: `1px solid ${T.blueBorder}`, borderRadius: 10, padding: 13 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 700 }}>Approver decision</div>
+      <div style={{ fontSize: 12.5, color: T.dim, marginTop: 2, lineHeight: 1.45 }}>
+        Must be someone other than the owner ({agent.owner}).
+        {activation && !req.done && ` ${req.open.length} item${req.open.length === 1 ? " is" : "s are"} still open, so this can only be a conditional activation.`}
+        {!activation && !req.done && " Reinstatement needs every item met first."}
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <label style={labelStyle(T)}>Approved by</label>
+        <select value={by} onChange={e => setBy(e.target.value)} style={fieldStyle(T)}>
+          <option value="">Select approver…</option>
+          {POLICY_ROLES.map(r => <option key={r}>{r}</option>)}
+        </select>
+      </div>
+      {activation && !req.done && (
+        <div style={{ marginTop: 10 }}>
+          <label style={labelStyle(T)}>Open items due by (max {CONDITION_MAX_DAYS} days)</label>
+          <input type="date" value={due} max={maxDue} onChange={e => setDue(e.target.value)} style={fieldStyle(T)} />
+        </div>
+      )}
+      {rejecting ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+          <input autoFocus value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason for returning it to the owner (required)" style={fieldStyle(T)} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button disabled={!byOk || !reason.trim()} onClick={() => life.decide(agent.id, { decision: "reject", by, reason: reason.trim() })} style={btnStyle(T, true, byOk && !!reason.trim())}>Return to owner</button>
+            <button onClick={() => setRejecting(false)} style={btnStyle(T, false)}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          {req.done
+            ? <button disabled={!byOk} onClick={() => life.decide(agent.id, { decision: "approve", by })} style={btnStyle(T, true, byOk)}><BadgeCheck size={14} /> {activation ? "Approve activation" : "Approve reinstatement"}</button>
+            : activation && <button disabled={!byOk || !dueOk} onClick={() => life.decide(agent.id, { decision: "conditional", by, due })} style={btnStyle(T, true, byOk && dueOk)}><BadgeCheck size={14} /> Approve with conditions</button>}
+          {!activation && !req.done && <button disabled style={btnStyle(T, true, false)}>Approve reinstatement</button>}
+          <button onClick={() => setRejecting(true)} style={btnStyle(T, false)}>Return to owner</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LifecycleCard({ agent, policies, audit, treatments, actions, life, onShowTab }) {
+  const T = useT();
+  const red = T.isDark ? "#f43f5e" : "#e11d48";
+  const green = T.isDark ? "#34d399" : "#059669";
+  const ctx = { audit, treatments };
+
+  if (agent.status === "active") {
+    if (!agent.conditions && !agent.probation) return null;
+    const act = agent.conditions ? requirements(agent, "activation", ctx) : null;
+    return (
+      <div id="lifecycle-card" style={{ border: `1px solid ${T.blueBorder}`, background: T.blueSoft, borderRadius: 10, padding: 14, marginBottom: 18 }}>
+        {agent.probation && (
+          <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+            <b>On probation until {agent.probation.until}.</b> Reinstated by {agent.probation.by} on {agent.probation.on}. A single critical violation suspends the agent again.
+          </div>
+        )}
+        {agent.conditions && (
+          <div style={{ marginTop: agent.probation ? 10 : 0 }}>
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}><b>Conditional activation</b> approved by {agent.conditions.by} on {agent.conditions.on}. Open items are due by <b>{agent.conditions.due}</b>.</div>
+            {agent.conditions.items.map(id => {
+              const it = act.items.find(i => i.id === id);
+              return it && (
+                <div key={id} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, fontSize: 13 }}>
+                  {it.met ? <CheckCircle2 size={15} color={green} /> : <Clock size={15} color={T.isDark ? "#f59e0b" : "#b45309"} />}
+                  <span style={{ color: it.met ? T.dim : T.text }}>{it.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const req = lifecycle(agent, ctx);
+  const activation = req.kind === "activation";
+  const pct = Math.round((req.met / req.total) * 100);
+  return (
+    <div id="lifecycle-card" style={{ border: `1px solid ${activation ? T.blueBorder : (T.isDark ? "rgba(244,63,94,.45)" : "rgba(225,29,72,.35)")}`, borderRadius: 10, padding: 14, marginBottom: 18, background: activation ? T.blueSoft : (T.isDark ? "rgba(244,63,94,.06)" : "rgba(225,29,72,.04)") }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {activation ? <Clock size={17} color={T.blue} /> : <ShieldAlert size={17} color={red} />}
+        <div style={{ fontSize: 15.5, fontWeight: 800, color: activation ? T.text : red }}>
+          {activation ? "Pending review" : "Suspended"}
+        </div>
+      </div>
+      {activation ? (
+        <div style={{ fontSize: 13, color: T.dim, lineHeight: 1.5, marginTop: 4 }}>
+          New agents can't run until the owner completes these requirements and an independent approver activates them.
+        </div>
+      ) : (
+        <div style={{ fontSize: 13, lineHeight: 1.55, marginTop: 6 }}>
+          Suspended on <b>{agent.suspension?.on}</b> by the <b>{agent.suspension?.by}</b>: {agent.suspension?.reason}. The owner must fix the causes below, then an independent approver can reinstate it.
+        </div>
+      )}
+
+      {agent.lastDecision?.decision === "reject" && !agent.review && (
+        <div style={{ marginTop: 10, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 8, padding: "8px 11px", fontSize: 12.5, color: T.warnBox.fg, lineHeight: 1.45 }}>
+          Returned by {agent.lastDecision.by} on {agent.lastDecision.on}: {agent.lastDecision.reason}
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "12px 0 4px" }}>
+        <div style={{ flex: 1, height: 7, borderRadius: 99, background: T.panelSoft, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: req.done ? green : T.blue, borderRadius: 99 }} />
+        </div>
+        <span style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>{req.met} of {req.total} met</span>
+      </div>
+
+      <div>
+        {req.items.map(it => <RequirementRow key={it.id} item={it} agent={agent} policies={policies} audit={audit} actions={actions} life={life} onShowTab={onShowTab} />)}
+      </div>
+
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+        {agent.review ? (
+          <>
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+              <b>Submitted for {req.kind}</b> by {agent.review.by} (owner) on {agent.review.on}. Awaiting an approver.
+              <button onClick={() => life.withdraw(agent.id)} style={{ marginLeft: 8, background: "none", border: "none", color: T.blue, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>Withdraw</button>
+            </div>
+            <ApprovalPanel agent={agent} req={req} life={life} />
+          </>
+        ) : (
+          <>
+            {!req.done && (
+              <div style={{ fontSize: 12.5, color: T.dim, marginBottom: 8, lineHeight: 1.45 }}>
+                {activation
+                  ? `${req.total - req.met} item${req.total - req.met === 1 ? "" : "s"} still open. You can submit now and the approver may activate conditionally, with a due date for the rest.`
+                  : "Submit once every item is met. Reinstatement after a suspension can't be conditional."}
+              </div>
+            )}
+            <button disabled={!activation && !req.done} onClick={() => life.submit(agent.id, req.kind)} style={btnStyle(T, true, activation || req.done)}>
+              Submit for {req.kind} <span style={{ fontWeight: 500, opacity: .85 }}>(as owner: {agent.owner})</span>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- agent detail drawer ---------------- */
 
 const POLICY_STATE = {
@@ -2369,7 +2660,7 @@ function DrawerSection({ title, sub, children }) {
   );
 }
 
-function AgentDrawer({ agent, audit, policies, actions, onClose, onUpdateTraits, onExclude, onInclude }) {
+function AgentDrawer({ agent, audit, policies, actions, treatments, life, onClose, onUpdateTraits, onExclude, onInclude }) {
   const T = useT();
   const [editing, setEditing] = useState(false);
   const [draftTraits, setDraftTraits] = useState({});
@@ -2419,9 +2710,14 @@ function AgentDrawer({ agent, audit, policies, actions, onClose, onUpdateTraits,
         </div>
         <div style={{ color: T.faint, fontSize: 13.5, marginBottom: 14 }}>{agent.model}</div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <Pill fg={s.fg} bg={s.bg} border={s.border}>{agent.status}</Pill>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          <button onClick={() => { setView("overview"); setTimeout(() => document.getElementById("lifecycle-card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
+            title="Show status and next steps" aria-label={`Status ${agent.status}. Show next steps`}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+            <Pill fg={s.fg} bg={s.bg} border={s.border}>{agent.status}{agent.conditions ? " · conditional" : ""}{agent.probation ? " · probation" : ""}</Pill>
+          </button>
           <Pill fg={r.fg} bg={r.bg} border={r.border}>{agent.risk}</Pill>
+          {nextStep(agent, { audit, treatments }) && <span style={{ fontSize: 12, color: T.faint, alignSelf: "center" }}>{nextStep(agent, { audit, treatments })}</span>}
         </div>
 
         <div style={{ marginBottom: 18 }}>
@@ -2430,6 +2726,7 @@ function AgentDrawer({ agent, audit, policies, actions, onClose, onUpdateTraits,
         {view === "architecture" && <ArchitectureTab agent={agent} policies={policies} audit={audit} actions={actions} />}
         {view === "risk" && <AgentRiskTab agent={agent} policies={policies} audit={audit} actions={actions} />}
         {view === "overview" && (<>
+        <LifecycleCard agent={agent} policies={policies} audit={audit} treatments={treatments} actions={actions} life={life} onShowTab={setView} />
         {agent.desc && <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 18 }}>{agent.desc}</div>}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
@@ -3106,10 +3403,11 @@ function AssessmentReport(props) {
   );
 }
 
-function Assessments({ scored, register, gap, policies, audit, treatments, actions, onSaveTreatment, onGapField, onMarkNA, onOpenAgent }) {
+function Assessments({ scored, register, gap, policies, audit, treatments, actions, onSaveTreatment, onGapField, onMarkNA, onOpenAgent, focus, onFocusDone }) {
   const T = useT();
   const [tab, setTab] = useState("risk");
   const [openId, setOpenId] = useState(null);
+  useEffect(() => { if (focus) { setTab("risk"); setOpenId(focus); onFocusDone(); } }, [focus]);
   const entry = openId && register.find(s => s.id === openId);
   return (
     <div>
@@ -3152,6 +3450,7 @@ export default function ArgusMVP() {
   const coverage = useMemo(() => computeCoverage(reqMap, policies), [reqMap, policies]);
   const [treatments, setTreatments] = useState({});
   const [gapOverrides, setGapOverrides] = useState({});
+  const [riskFocus, setRiskFocus] = useState(null);
   // agent risk scores, the risk register and the gap assessment are all derived from current state
   const scored = useMemo(() => agents.map(a => ({ ...a, ...scoreAgent(a, policies, audit) })), [agents, policies, audit]);
   const register = useMemo(() => buildRegister(scored), [scored]);
@@ -3182,6 +3481,7 @@ export default function ArgusMVP() {
     setAudit(SEED_AUDIT);
     setReqMap(SEED_REQ_MAP);
     setTreatments({});
+    setRiskFocus(null);
     setGapOverrides({});
     setDetailId(null);
     setFwOpen(null);
@@ -3244,7 +3544,79 @@ export default function ArgusMVP() {
     if (a) setDetailId(a.id);
   };
 
-  const updateAgent = (id, patch) => setAgents(as => as.map(a => a.id === id ? { ...a, ...patch } : a));
+  const updateAgent = (id, patch) => setAgents(as => as.map(a => a.id === id ? { ...a, ...(typeof patch === "function" ? patch(a) : patch) } : a));
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  // Agent lifecycle: owner works the requirements and submits; an independent approver decides
+  const life = {
+    attest: (id, key) => {
+      const a = agents.find(x => x.id === id);
+      updateAgent(id, x => ({ attest: { ...(x.attest || {}), [key]: { by: x.owner, on: today() } } }));
+      log("info", "Owner Attestation", a.name, `${a.owner} confirmed ${a.name}'s ${key === "arch" ? "architecture" : "characteristics"} are accurate`);
+    },
+    rootCause: (id, vid, v) => {
+      const a = agents.find(x => x.id === id);
+      updateAgent(id, x => ({ resolutions: { ...(x.resolutions || {}), [vid]: { ...v, by: x.owner, on: today() } } }));
+      log("info", "Root Cause Recorded", a.name, `Root cause recorded for ${a.name} violation ${vid}: ${v.cause}. Fix: ${v.fix}`);
+    },
+    retest: (id, pid, evidence) => {
+      const a = agents.find(x => x.id === id);
+      const p = policies.find(x => x.id === pid);
+      updateAgent(id, x => ({ retests: { ...(x.retests || {}), [pid]: { evidence, by: x.owner, on: today() } } }));
+      log("info", "Control Re-tested", a.name, `"${p?.name}" re-tested against ${a.name}: ${evidence}`);
+      notify(`${p?.name} re-tested`);
+    },
+    autonomy: (id, level) => {
+      const a = agents.find(x => x.id === id);
+      updateAgent(id, { autonomy: level });
+      log("info", "Autonomy Change", a.name, `${a.name} autonomy reduced from ${a.autonomy.toLowerCase()} to ${level.toLowerCase()}`);
+      notify(`${a.name} is now ${level.toLowerCase()}`);
+    },
+    submit: (id, kind) => {
+      const a = scored.find(x => x.id === id);
+      const r = requirements(a, kind, { audit, treatments });
+      updateAgent(id, { review: { kind, by: a.owner, on: today() } });
+      log("info", kind === "activation" ? "Submitted for Activation" : "Submitted for Reinstatement", a.name,
+        `${a.owner} submitted ${a.name} for ${kind} with ${r.met} of ${r.total} requirements met`);
+      notify("Submitted for approval");
+    },
+    withdraw: id => {
+      const a = agents.find(x => x.id === id);
+      updateAgent(id, { review: null });
+      log("info", "Submission Withdrawn", a.name, `${a.owner} withdrew ${a.name}'s submission`);
+    },
+    decide: (id, dec) => {
+      const a = scored.find(x => x.id === id);
+      const kind = a.status === "pending" ? "activation" : "reinstatement";
+      if (dec.decision === "reject") {
+        updateAgent(id, { review: null, lastDecision: { decision: "reject", by: dec.by, reason: dec.reason, on: today() } });
+        log("warn", kind === "activation" ? "Activation Returned" : "Reinstatement Returned", a.name, `${dec.by} returned ${a.name} to its owner: ${dec.reason}`);
+        notify("Returned to owner");
+        return;
+      }
+      if (kind === "activation") {
+        const r = requirements(a, "activation", { audit, treatments });
+        const conditional = dec.decision === "conditional";
+        updateAgent(id, {
+          status: "active", review: null, lastDecision: { decision: dec.decision, by: dec.by, on: today() },
+          conditions: conditional ? { items: r.open.map(i => i.id), due: dec.due, by: dec.by, on: today() } : null,
+        });
+        log("info", conditional ? "Agent Conditionally Activated" : "Agent Activated", a.name, conditional
+          ? `${dec.by} activated ${a.name} with conditions. Open items due ${dec.due}: ${r.open.map(i => i.label.replace(/ \(.*\)$/, "").toLowerCase()).join("; ")}`
+          : `${dec.by} activated ${a.name} with all requirements met`);
+        notify(`${a.name} activated${conditional ? " with conditions" : ""}`);
+      } else {
+        updateAgent(id, {
+          status: "active", review: null, lastDecision: { decision: "approve", by: dec.by, on: today() },
+          pastSuspension: a.suspension, suspension: null,
+          probation: { until: addDays(PROBATION_DAYS), by: dec.by, on: today() },
+        });
+        log("info", "Agent Reinstated", a.name, `${dec.by} reinstated ${a.name} with all remediation complete. On probation until ${addDays(PROBATION_DAYS)}`);
+        notify(`${a.name} reinstated on ${PROBATION_DAYS}-day probation`);
+      }
+    },
+    openRisk: sid => { setDetailId(null); setView("assessments"); setNavOpen(false); setRiskFocus(sid); },
+  };
 
   const updateTraits = (id, traits) => {
     const a = agents.find(x => x.id === id);
@@ -3486,13 +3858,14 @@ export default function ArgusMVP() {
 
           <main style={{ padding: mobile ? "18px 16px 96px" : 28, minWidth: 0 }}>
             {view === "dashboard" && <Dashboard agents={scored} coverage={coverage} openAgent={openAgent} onOpenFrameworks={() => go("frameworks")} />}
-            {view === "registry" && <Registry agents={scored} policies={policies} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
+            {view === "registry" && <Registry agents={scored} policies={policies} audit={audit} treatments={treatments} openAgent={openAgent} onOpenRegister={() => setModal("register")} />}
             {view === "policy" && <PolicyEngine policies={policies} reqMap={reqMap} toggle={togglePolicy} onOpenCreate={() => openCreatePolicy()} onApprove={setApproving} />}
             {view === "frameworks" && <Frameworks coverage={coverage} gapKeys={gapKeys} policies={policies} onOpen={setFwOpen} onAdopt={adoptRecommendation} />}
             {view === "audit" && <AuditTrail audit={audit} />}
             {view === "heatmap" && <Heatmap agents={scored} openAgent={openAgent} />}
             {view === "assessments" && <Assessments scored={scored} register={register} gap={gap} policies={policies} audit={audit} treatments={treatments}
-              actions={actions} onSaveTreatment={saveTreatment} onGapField={setGapField} onMarkNA={markNA} onOpenAgent={openAgent} />}
+              actions={actions} onSaveTreatment={saveTreatment} onGapField={setGapField} onMarkNA={markNA} onOpenAgent={openAgent}
+              focus={riskFocus} onFocusDone={() => setRiskFocus(null)} />}
           </main>
         </div>
 
@@ -3503,6 +3876,7 @@ export default function ArgusMVP() {
           <ApprovePolicyModal policy={policies.find(p => p.id === approving)} onClose={() => setApproving(null)} onApprove={approvePolicy} />
         )}
         <AgentDrawer key={detailId ?? "none"} agent={scored.find(a => a.id === detailId)} audit={audit} policies={policies} actions={actions}
+          treatments={treatments} life={life}
           onClose={() => setDetailId(null)} onUpdateTraits={updateTraits} onExclude={excludeMapping} onInclude={includeMapping} />
         <FrameworkDrawer framework={openFramework} policies={policies} gapKeys={gapKeys} onClose={() => setFwOpen(null)}
           onLink={linkPolicy} onTogglePolicy={togglePolicy} onAdopt={adoptRecommendation} onApprove={setApproving} />

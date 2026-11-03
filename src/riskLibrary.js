@@ -145,11 +145,15 @@ const AUTONOMY_IMPACT = { R04: 1, R07: 0, R19: 1 };
 
 /* ---------------- per-agent assessment ---------------- */
 
+// A violation is resolved once its root cause is recorded and the broken control is re-tested.
+// Resolved violations stay in the history but no longer count against the agent.
+export const isResolved = (agent, e) => !!(e.id && agent.resolutions?.[e.id] && agent.retests?.[e.policy]);
+
 export function assessAgent(agent, policies, mapping = mapAgent(agent, policies), audit = []) {
   const polState = Object.fromEntries(mapping.policies.map(p => [p.id, p]));
   const inScope = id => polState[id] && !polState[id].excluded;
   // a control with a recorded violation by this agent is not working, so it doesn't reduce risk
-  const violated = new Set(audit.filter(e => e.agent === agent.name && e.type === "Policy Violation" && e.policy).map(e => e.policy));
+  const violated = new Set(audit.filter(e => e.agent === agent.name && e.type === "Policy Violation" && e.policy && !isResolved(agent, e)).map(e => e.policy));
   const active = id => inScope(id) && polState[id].state === "active" && !violated.has(id);
   const fullAuto = agent.autonomy === "Full autonomy";
 
@@ -182,14 +186,14 @@ export function assessAgent(agent, policies, mapping = mapAgent(agent, policies)
  *   + 15 points per critical policy violation and 5 per warning on record (max 40)
  * A control the agent has violated is treated as not working when residual risk is scored.
  */
-export const AGENT_SCORE_METHOD = "Average of the agent's three highest residual risk scores (each out of 25) scaled to 100, plus 15 points per critical policy violation and 5 per warning on record (up to 40), capped at 100. A control the agent has violated doesn't count toward reducing its risk.";
+export const AGENT_SCORE_METHOD = "Average of the agent's three highest residual risk scores (each out of 25) scaled to 100, plus 15 points per open critical policy violation and 5 per open warning (up to 40), capped at 100. A control the agent has violated doesn't count toward reducing its risk until it is re-tested. Resolved violations stay in the history but stop counting.";
 
 export function scoreAgent(agent, policies, audit) {
   const mapping = mapAgent(agent, policies);
   const risks = assessAgent(agent, policies, mapping, audit);
   const top = [...risks].map(r => r.residual.score).sort((a, b) => b - a).slice(0, 3);
   const base = top.length ? (top.reduce((a, b) => a + b, 0) / top.length) * 4 : 0;
-  const violations = audit.filter(e => e.agent === agent.name && e.type === "Policy Violation");
+  const violations = audit.filter(e => e.agent === agent.name && e.type === "Policy Violation" && !isResolved(agent, e));
   const crit = violations.filter(e => e.sev === "critical").length;
   const warn = violations.filter(e => e.sev === "warn").length;
   const incidents = Math.min(40, crit * 15 + warn * 5);

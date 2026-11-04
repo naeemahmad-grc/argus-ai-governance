@@ -8,7 +8,8 @@
  * A requirement is covered when an always-on platform capability or at least
  * one enabled, approved policy is mapped to it. Requirements with neither are gaps.
  *
- * Status notes reflect public information as of November 2026.
+ * Status notes were checked against sources on Nov 3, 2026; see regulatory.js for
+ * each claim, its source and its verification status.
  */
 
 // Always-on platform capabilities (not toggleable like policies)
@@ -35,10 +36,10 @@ export const FRAMEWORKS = [
     short: "EU AI Act",
     name: "EU Artificial Intelligence Act",
     group: "regulation",
-    source: "Regulation (EU) 2024/1689",
-    note: "Under the Digital Omnibus agreed in 2026, Annex III high-risk obligations move from Aug 2, 2026 to Dec 2, 2027, and Annex I product-regulated systems to Aug 2028.",
+    source: "Regulation (EU) 2024/1689, as amended by Regulation (EU) 2026/1744 (Digital Omnibus on AI)",
+    note: "The Digital Omnibus on AI (Regulation (EU) 2026/1744, in force July 27, 2026) moves Annex III high-risk obligations from Aug 2, 2026 to Dec 2, 2027, and Annex I product-regulated systems to Aug 2, 2028. Article 4 still requires providers and deployers to take measures supporting AI literacy, in softer wording than before. Transparency duties under Article 50 apply from Aug 2, 2026.",
     requirements: [
-      r("Art. 4", "AI literacy for staff operating AI systems"),
+      r("Art. 4", "Measures supporting AI literacy of staff operating AI systems"),
       r("Art. 9", "Risk management system across the AI lifecycle", ["cap:risk", "p5"]),
       r("Art. 12", "Record-keeping through automatic event logs", ["cap:audit", "p4"]),
       r("Art. 14", "Human oversight, including ability to intervene or halt", ["p2", "p5", "p12"]),
@@ -71,7 +72,7 @@ export const FRAMEWORKS = [
     name: "NIST AI Risk Management Framework",
     group: "standard",
     source: "NIST AI 100-1 (Govern, Map, Measure, Manage)",
-    note: "Voluntary US framework; the de facto vocabulary for enterprise AI risk programs. Generative AI Profile published as NIST AI 600-1.",
+    note: "Voluntary US framework; the de facto vocabulary for enterprise AI risk programs. Generative AI Profile published as NIST AI 600-1. NIST says AI RMF 1.0 is being revised under the White House AI Action Plan; no revised version had been published as of November 2026.",
     requirements: [
       r("GOVERN 1.6", "Mechanisms to inventory AI systems", ["cap:registry"]),
       r("GOVERN 6.1", "Policies for third-party AI risks", ["p13"]),
@@ -140,14 +141,14 @@ export const FRAMEWORKS = [
     short: "OWASP Agentic",
     name: "OWASP Top 10 for Agentic Applications",
     group: "security",
-    source: "OWASP GenAI Security Project, 2026 edition (Dec 2025)",
+    source: "OWASP GenAI Security Project, 2026 edition (Dec 9, 2025)",
     note: "Risks specific to autonomous agents: goal hijacking, tool misuse, privilege abuse and rogue behavior.",
     requirements: [
       r("ASI01", "Agent Goal Hijack", ["p9"]),
       r("ASI02", "Tool Misuse & Exploitation", ["p10"]),
       r("ASI03", "Identity & Privilege Abuse", ["p6"]),
       r("ASI04", "Agentic Supply Chain Vulnerabilities", ["p13"]),
-      r("ASI05", "Unexpected Code Execution"),
+      r("ASI05", "Unexpected Code Execution (RCE)"),
       r("ASI06", "Memory & Context Poisoning"),
       r("ASI07", "Insecure Inter-Agent Communication"),
       r("ASI08", "Cascading Failures", ["p12"]),
@@ -178,8 +179,8 @@ export const FRAMEWORKS = [
     short: "CSA AISMM",
     name: "CSA AI Security Maturity Model",
     group: "security",
-    source: "Cloud Security Alliance (introduced May 2026)",
-    note: "Program-level model with five CCM-aligned maturity levels, layered on the AICM. Its control objectives were still in public review at release, so ARGUS shows indicative capability evidence, not an official assessment.",
+    source: "Cloud Security Alliance (released May 19, 2026)",
+    note: "Program-level model with five maturity levels (L1 Initial to L5 Efficient), aligned with the AI Controls Matrix and structured like CSA's Cloud Security Maturity Model. CSA calls it a living document that will be revised, so ARGUS shows indicative capability evidence, not an official assessment.",
     maturity: true,
     requirements: [
       r("Inventory", "AI usage inventory across self-hosted, PaaS and API/SaaS", ["cap:registry"]),
@@ -195,14 +196,14 @@ export const FRAMEWORKS = [
     short: "MITRE ATLAS",
     name: "MITRE ATLAS",
     group: "security",
-    source: "Adversarial Threat Landscape for AI Systems",
-    note: "Adversary techniques against AI systems. Covered means an ARGUS control mitigates or detects the technique.",
+    source: "Adversarial Threat Landscape for AI Systems, release 2026.10 (Oct 28, 2026)",
+    note: "Adversary techniques against AI systems. Covered means an ARGUS control mitigates or detects the technique. In release 2026.10, Extract LLM System Prompt (AML.T0056) and LLM Data Leakage (AML.T0057) moved under Data from AI Services (AML.T0085), and AI Supply Chain Compromise was renamed Supply Chain Compromise.",
     requirements: [
       r("AML.T0051", "LLM Prompt Injection", ["p9"]),
       r("AML.T0053", "AI Agent Tool Invocation", ["p10"]),
-      r("AML.T0056", "Extract LLM System Prompt", ["p11"]),
-      r("AML.T0057", "LLM Data Leakage", ["p1", "p11"]),
-      r("AML.T0010", "AI Supply Chain Compromise", ["p13"]),
+      r("AML.T0085.003", "Data from AI Services: System Instructions", ["p11"]),
+      r("AML.T0085.002", "Data from AI Services: Conversation Context and Memory", ["p1", "p11"]),
+      r("AML.T0010", "Supply Chain Compromise", ["p13"]),
       r("AML.T0034.002", "Agentic Resource Consumption", ["p8"]),
       r("AML.T0070", "RAG Poisoning"),
       r("AML.T0080", "AI Agent Context Poisoning"),
@@ -253,6 +254,7 @@ export const FRAMEWORKS = [
     name: "HIPAA Security & Privacy Rules",
     group: "baseline",
     source: "45 CFR Parts 160 and 164",
+    note: "Shows the Security Rule currently in effect. HHS proposed a major Security Rule update in January 2025; it has not been finalized, and the regulatory agenda targets July 2027.",
     requirements: [
       r("164.312(a)(1)", "Access control for ePHI", ["p3"]),
       r("164.312(b)", "Audit controls", ["cap:audit"]),

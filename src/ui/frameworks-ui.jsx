@@ -10,6 +10,8 @@ import { MethodNote, assessmentTiles } from "./decisions-ui.jsx";
 import { FilterChip } from "./registry.jsx";
 
 import { useQueryState } from "../router.js";
+import { RECORD_VERIFICATION, VERIFICATION, FORCE, CONTENT_VERSION, CONTENT_REVIEWED, regulatoryFor, reviewState } from "../regulatory.js";
+import { fmtDate } from "../timeline.js";
 /* ---------------- frameworks ---------------- */
 
 export function Frameworks({ assessment, gapKeys, policies, onOpen, onAdopt }) {
@@ -55,7 +57,10 @@ export function Frameworks({ assessment, gapKeys, policies, onOpen, onAdopt }) {
           return (
             <Card key={f.id} onClick={() => onOpen(f.id)} style={{ padding: 18, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                <Pill small fg={T.dim} bg={T.panelSoft} border={T.border}>{FRAMEWORK_GROUPS.find(g => g.id === f.group).label}</Pill>
+                <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+                  <Pill small fg={T.dim} bg={T.panelSoft} border={T.border}>{FRAMEWORK_GROUPS.find(g => g.id === f.group).label}</Pill>
+                  <ReviewBadge id={f.id} />
+                </span>
                 <ChevronRight size={17} color={T.faint} />
               </div>
               <div>
@@ -75,7 +80,7 @@ export function Frameworks({ assessment, gapKeys, policies, onOpen, onAdopt }) {
       </div>
 
       <div style={{ color: T.faint, fontSize: 12, marginTop: 18, lineHeight: 1.5 }}>
-        {SCOPE_DISCLAIMER} {COVERAGE_METHOD}
+        {SCOPE_DISCLAIMER} {COVERAGE_METHOD} Regulatory content version {CONTENT_VERSION}, last reviewed {fmtDate(CONTENT_REVIEWED)}; open a framework to see its sources and which claims still need review.
       </div>
     </div>
   );
@@ -213,7 +218,7 @@ export function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.25 }}>{f.name}</div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.25, margin: 0 }}>{f.name}</h2>
             <div style={{ color: T.faint, fontSize: 13, marginTop: 4 }}>{f.source}</div>
           </div>
           <button onClick={onClose} aria-label="Close framework" style={{ background: "none", border: "none", color: T.dim, cursor: "pointer", flexShrink: 0 }}><X size={20} /></button>
@@ -232,6 +237,7 @@ export function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink,
             <div style={{ fontSize: 13, lineHeight: 1.55, color: T.text }}>{f.note}</div>
           </div>
         )}
+        <RegulatorySource id={f.id} />
 
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Requirements</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -326,5 +332,62 @@ export function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink,
         )}
       </div>
     </div>
+  );
+}
+
+// Verification badge for a framework's regulatory record
+export function ReviewBadge({ id }) {
+  const T = useT();
+  const st = reviewState(id);
+  const tone = st === "verified" ? T.risk.LOW : st === "secondary" ? T.risk.MEDIUM : T.risk.HIGH;
+  return <span title={VERIFICATION[st].detail}><Pill small fg={tone.fg} bg={tone.bg} border={tone.border}>{st === "pending" ? "! " : "✓ "}{VERIFICATION[st].label}</Pill></span>;
+}
+
+// Where a framework comes from, what kind of instrument it is, the dates that matter, and what has been checked
+export function RegulatorySource({ id }) {
+  const T = useT();
+  const r = regulatoryFor(id);
+  const [open, setOpen] = useState(false);
+  if (!r) return null;
+  const row = (k, v) => (<><dt style={{ color: T.faint }}>{k}</dt><dd style={{ margin: 0 }}>{v}</dd></>);
+  const pending = r.claims.filter(c => c.verification === "pending").length;
+  return (
+    <section aria-label="Source and status" style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 18 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>Source and status</h3>
+        <ReviewBadge id={id} />
+      </div>
+      <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 12px", margin: "10px 0 0", fontSize: 12.5, lineHeight: 1.45 }}>
+        {row("Instrument", r.official)}
+        {row("Issued by", `${r.publisher} · ${r.jurisdiction}`)}
+        {row("Legal force", FORCE[r.force])}
+        {row("Version used", r.version)}
+        {r.dates.length > 0 && row("Key dates", <ul style={{ margin: 0, paddingLeft: 16 }}>{r.dates.map(d => <li key={d.label}>{d.label}: {/^\d{4}-\d{2}-\d{2}$/.test(d.date) ? fmtDate(d.date) : d.date}</li>)}</ul>)}
+        {row("Primary source", <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ color: T.blue, wordBreak: "break-all" }}>{r.url}</a>)}
+        {row("Record status", `${VERIFICATION[RECORD_VERIFICATION[id]].label}: ${VERIFICATION[RECORD_VERIFICATION[id]].detail.toLowerCase()}`)}
+        {row("Last reviewed", `${fmtDate(CONTENT_REVIEWED)} · content version ${CONTENT_VERSION}`)}
+      </dl>
+      <button aria-expanded={open} onClick={() => setOpen(o => !o)} style={{ background: "none", border: "none", color: T.blue, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0, marginTop: 8 }}>
+        {open ? "Hide" : "Show"} the {r.claims.length} claim{r.claims.length === 1 ? "" : "s"} ARGUS makes{pending ? ` (${pending} need${pending === 1 ? "s" : ""} review)` : ""}
+      </button>
+      {open && (
+        <ul style={{ listStyle: "none", padding: 0, margin: "8px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
+          {r.claims.map(c => (
+            <li key={c.id} style={{ fontSize: 12.5, lineHeight: 1.45, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <b>{VERIFICATION[c.verification].label}</b><span style={{ color: T.faint }}>· {c.kind}</span>
+              </div>
+              <div style={{ color: T.dim, marginTop: 2 }}>{c.text}</div>
+              {c.finding && <div style={{ marginTop: 2 }}>Finding: {c.finding}</div>}
+              {c.sources && <div style={{ marginTop: 2 }}>{c.sources.map(x => <a key={x.url} href={x.url} target="_blank" rel="noopener noreferrer" style={{ color: T.blue, marginRight: 10 }}>{x.label}</a>)}</div>}
+              {c.checkedOn && <div style={{ color: T.faint, marginTop: 2 }}>Checked {fmtDate(c.checkedOn)}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div style={{ fontSize: 12, color: T.faint, marginTop: 8, lineHeight: 1.45 }}>
+        Requirement titles below are ARGUS summaries used to map controls, not the official wording. Not legal advice.
+      </div>
+    </section>
   );
 }

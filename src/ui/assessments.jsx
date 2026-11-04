@@ -22,6 +22,7 @@ import { FilterChip, chipRow } from "./registry.jsx";
 
 import { useQueryState } from "../router.js";
 import { NotFound } from "./base.jsx";
+import { CONTENT_VERSION, CONTENT_REVIEWED, allClaims } from "../regulatory.js";
 /* ---------------- risk & gap assessment ---------------- */
 
 export const TREATMENTS = ["Mitigate", "Accept", "Transfer", "Avoid"];
@@ -600,6 +601,7 @@ export function ReportBody({ scored, register, assessment, treatments, policies,
 
       <H2>Methodology</H2>
       <ul style={{ margin: 0, paddingLeft: 18 }}>
+        <li>Regulatory content version {CONTENT_VERSION}, last reviewed {CONTENT_REVIEWED}. {(() => { const c = allClaims(); const p = c.filter(x => x.verification === "pending").length; return `${c.length - p} of ${c.length} regulatory claims checked against sources; ${p ? `${p} still need review and are flagged in the Frameworks view` : "none outstanding"}.`; })()} Requirement titles are ARGUS summaries, not official wording, and nothing in this report is legal advice.</li>
         <li>Risk scenarios follow a {RISK_CATEGORIES.length}-category AI risk taxonomy and are mapped to OWASP, MITRE ATLAS, NIST AI RMF and applicable regulations.</li>
         <li>Each scenario is scored likelihood × impact on 5-point scales. Inherent risk is before controls; residual risk credits only controls that are enabled, approved, in scope for the agent and not violated by it; target risk assumes every mapped control is in place. Bands: {RISK_BANDS}.</li>
         <li>Agent risk score: {AGENT_SCORE_METHOD}</li>

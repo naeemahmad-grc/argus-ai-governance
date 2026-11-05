@@ -26,9 +26,21 @@ export function NotAllowed({ action, ctx, why, compact }) {
   );
 }
 
-export function IdentitySwitcher() {
+export function IdentitySwitcher({ compact = false, onExpand }) {
   const T = useT();
   const { user, actAs } = useActor();
+  if (compact) {
+    const initials = user.name.split(" ").map(w => w[0]).join("").slice(0, 2);
+    return (
+      <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 12, marginTop: "auto", display: "flex", justifyContent: "center" }}>
+        <button onClick={onExpand} title={`Acting as ${user.name} (simulated). Expand to switch.`}
+          aria-label={`Acting as ${user.name}, simulated. Expand the sidebar to switch user.`}
+          style={{ width: 38, height: 38, borderRadius: "50%", border: `1px solid ${T.border}`, background: T.panel, color: T.text, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          {initials}
+        </button>
+      </div>
+    );
+  }
   return (
     <div style={{ borderTop: `1px solid ${T.border}`, padding: "12px 8px 0", marginTop: "auto" }}>
       <label htmlFor="acting-as" style={{ display: "block", color: T.faint, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", marginBottom: 6 }}>ACTING AS (SIMULATED)</label>

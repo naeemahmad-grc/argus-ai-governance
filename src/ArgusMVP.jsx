@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { 
   Search, Bell, Activity, Users, FileText, AlertTriangle, ScanSearch, CheckCircle2, X, Info, Sun, Moon,
-  RotateCcw, MessageCircle, ExternalLink, Menu, Layers, ClipboardCheck, Inbox
+  RotateCcw, MessageCircle, ExternalLink, Menu, Layers, ClipboardCheck, Inbox, PanelLeftClose, PanelLeftOpen
 } from "lucide-react";
 import { FRAMEWORKS, SEED_REQ_MAP, RECOMMENDED_POLICIES, reqLabel } from "./frameworks.js";
 import { TRAITS, mapAgent } from "./agentMapping.js";
@@ -64,6 +64,37 @@ export default function ArgusMVP() {
   const [toast, setToast] = useState(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  // desktop sidebar: drag its edge to resize; narrower than SNAP collapses to an icon rail
+  const RAIL = 76, SNAP = 160, MIN_W = 200, MAX_W = 320, FULL = 240;
+  const [sideW, setSideW] = useState(() => {
+    try { const v = +localStorage.getItem("argus-sidebar-width"); return v === RAIL || (v >= MIN_W && v <= MAX_W) ? v : FULL; } catch { return FULL; }
+  });
+  const [dragW, setDragW] = useState(null);
+  useEffect(() => { try { localStorage.setItem("argus-sidebar-width", String(sideW)); } catch { /* private mode */ } }, [sideW]);
+  const settle = w => (w < SNAP ? RAIL : Math.min(MAX_W, Math.max(MIN_W, Math.round(w))));
+  const shownW = dragW ?? sideW;
+  const rail = shownW < SNAP;
+  const toggleRail = () => setSideW(w => (w === RAIL ? FULL : RAIL));
+  const startDrag = e => {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = sideW;
+    let last = w0, moved = false;
+    const move = ev => { moved = moved || Math.abs(ev.clientX - x0) > 3; last = Math.min(MAX_W, Math.max(RAIL, w0 + ev.clientX - x0)); setDragW(last); };
+    const up = () => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      document.body.style.cursor = ""; document.body.style.userSelect = "";
+      setDragW(null); setSideW(moved ? settle(last) : w0);
+    };
+    document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
+  const resizeKey = e => {
+    const step = { ArrowLeft: -20, ArrowRight: 20 }[e.key];
+    if (step) { e.preventDefault(); setSideW(w => settle((w === RAIL && step > 0) ? MIN_W : w + step)); }
+    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleRail(); }
+    else if (e.key === "Home") { e.preventDefault(); setSideW(RAIL); }
+    else if (e.key === "End") { e.preventDefault(); setSideW(MAX_W); }
+  };
   const [testing, setTesting] = useState(null);
   // simulated identity: who is acting. Checks run in the browser only (see identity.js).
   const [userId, setUserId] = useState(DEFAULT_USER.id);
@@ -523,37 +554,62 @@ export default function ArgusMVP() {
     : [];
 
   const TG = onGlass(T);
+  const collapsed = !mobile && rail;
   const sidebar = (
     <ThemeCtx.Provider value={TG}>
     <aside style={{
-      width: 240, flexShrink: 0, background: TG.sidebar, borderRight: `1px solid ${TG.border}`,
-      display: "flex", flexDirection: "column", padding: "22px 14px", transition: "background .2s",
-      backdropFilter: TG.blur, WebkitBackdropFilter: TG.blur, color: TG.text,
-      ...(mobile ? { height: "100%", boxSizing: "border-box", boxShadow: TG.shadow } : { position: "sticky", top: 0, height: "100vh", boxSizing: "border-box" }),
+      width: mobile ? 240 : shownW, flexShrink: 0, background: TG.sidebar, borderRight: `1px solid ${TG.border}`,
+      display: "flex", flexDirection: "column", padding: collapsed ? "22px 12px" : "22px 14px", transition: dragW === null ? "background .2s, width .18s ease" : "background .2s",
+      backdropFilter: TG.blur, WebkitBackdropFilter: TG.blur, color: TG.text, overflow: "visible",
+      ...(mobile ? { height: "100%", boxSizing: "border-box", boxShadow: TG.shadow } : { position: "sticky", top: 0, height: "100vh", boxSizing: "border-box", zIndex: 20 }),
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "0 8px", marginBottom: 34 }}>
+      <div style={{ display: "flex", flexDirection: collapsed ? "column" : "row", alignItems: "center", gap: collapsed ? 14 : 11, padding: collapsed ? 0 : "0 8px", marginBottom: collapsed ? 26 : 34 }}>
         <PanoptesMark size={30} color={TG.text} />
-        <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: ".14em", color: TG.text, flex: 1 }}>ARGUS</span>
+        {!collapsed && <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: ".14em", color: TG.text, flex: 1 }}>ARGUS</span>}
+        {collapsed && <span style={srOnly}>ARGUS</span>}
+        {!mobile && (
+          <button onClick={toggleRail} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar to icons"} title={collapsed ? "Expand sidebar" : "Collapse to icons"}
+            aria-expanded={!collapsed} style={{ display: "flex", background: "none", border: "none", color: TG.dim, cursor: "pointer", padding: 4, borderRadius: 8 }}>
+            {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+        )}
         {mobile && (
           <button onClick={() => setNavOpen(false)} aria-label="Close menu" style={{ background: "none", border: "none", color: TG.dim, cursor: "pointer", padding: 4 }}><X size={20} /></button>
         )}
       </div>
-      <div style={{ color: TG.faint, fontSize: 11.5, fontWeight: 700, letterSpacing: ".12em", padding: "0 8px", marginBottom: 10 }}>OPERATIONS</div>
+      {!collapsed && <div style={{ color: TG.faint, fontSize: 11.5, fontWeight: 700, letterSpacing: ".12em", padding: "0 8px", marginBottom: 10, whiteSpace: "nowrap" }}>OPERATIONS</div>}
       <nav aria-label="Main" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {NAV.map(n => (
-          <button key={n.id} onClick={() => go(n.id)} aria-current={view === n.id ? "page" : undefined} aria-label={n.badge ? `${n.label}, ${n.badge} critical` : undefined} style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", whiteSpace: "nowrap",
+        {NAV.map(n => {
+          const name = n.badge ? `${n.label}, ${n.badge} critical` : n.label;
+          return (
+          <button key={n.id} onClick={() => go(n.id)} aria-current={view === n.id ? "page" : undefined}
+            aria-label={collapsed || n.badge ? name : undefined} title={collapsed ? name : undefined} style={{
+            position: "relative", display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start",
+            gap: 10, padding: collapsed ? "12px 0" : "11px 12px", whiteSpace: "nowrap",
             borderRadius: 14, border: "none", cursor: "pointer", fontSize: 14.5, fontWeight: 500,
             background: view === n.id ? TG.accent : "transparent",
             color: view === n.id ? TG.onAccent : TG.navText,
             boxShadow: view === n.id ? "inset 0 0 0 1px rgba(255,255,255,.25)" : "none", textAlign: "left", transition: "background .12s",
           }}>
-            {n.icon}<span style={{ flex: 1 }}>{n.label}</span>
-            {n.badge > 0 && <span aria-hidden="true" style={{ fontSize: 11.5, fontWeight: 700, minWidth: 20, textAlign: "center", padding: "1px 6px", borderRadius: 99, background: view === n.id ? "rgba(0,0,0,.3)" : "#e11d48", color: "#fff" }}>{n.badge}</span>}
+            {n.icon}
+            {!collapsed && <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{n.label}</span>}
+            {n.badge > 0 && (collapsed
+              ? <span aria-hidden="true" style={{ position: "absolute", top: 4, right: 8, fontSize: 10, fontWeight: 800, minWidth: 16, height: 16, lineHeight: "16px", textAlign: "center", padding: "0 4px", boxSizing: "border-box", borderRadius: 99, background: "#e11d48", color: "#fff" }}>{n.badge}</span>
+              : <span aria-hidden="true" style={{ fontSize: 11.5, fontWeight: 700, minWidth: 20, textAlign: "center", padding: "1px 6px", borderRadius: 99, background: view === n.id ? "rgba(0,0,0,.3)" : "#e11d48", color: "#fff" }}>{n.badge}</span>)}
           </button>
-        ))}
+          );
+        })}
       </nav>
-      <IdentitySwitcher />
+      <IdentitySwitcher compact={collapsed} onExpand={() => setSideW(FULL)} />
+      {!mobile && (
+        <div role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabIndex={0}
+          aria-valuemin={RAIL} aria-valuemax={MAX_W} aria-valuenow={Math.round(shownW)}
+          aria-valuetext={collapsed ? "Icons only" : `${Math.round(shownW)} pixels wide`}
+          title="Drag to resize · double-click to collapse or expand"
+          onPointerDown={startDrag} onDoubleClick={toggleRail} onKeyDown={resizeKey}
+          className="argus-resizer"
+          style={{ position: "absolute", top: 0, right: -5, width: 10, height: "100%", cursor: "col-resize", zIndex: 5, touchAction: "none" }} />
+      )}
     </aside>
     </ThemeCtx.Provider>
   );
@@ -575,6 +631,8 @@ export default function ArgusMVP() {
           g[role=button]:focus-visible > circle:nth-of-type(2), g[role=button]:focus-visible > rect:first-of-type { stroke: ${focusRing}; stroke-width: 4px; }
           .argus-skip { position: absolute; left: -9999px; top: 8px; z-index: 100; background: ${T.accent}; color: ${T.onAccent}; padding: 9px 14px; border-radius: 8px; font-weight: 700; text-decoration: none; }
           .argus-skip:focus { left: 8px; }
+          .argus-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background .15s; }
+          .argus-resizer:hover::after, .argus-resizer:focus-visible::after { background: rgba(124,196,239,.7); }
           .argus-glass-input::placeholder { color: ${TG.dim}; opacity: 1; }
         `}</style>
         <a href="#main" className="argus-skip" onClick={e => { e.preventDefault(); document.getElementById("main")?.focus(); }}>Skip to main content</a>

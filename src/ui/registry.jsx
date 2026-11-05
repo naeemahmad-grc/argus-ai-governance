@@ -15,14 +15,14 @@ export const FilterChip = ({ active, onClick, label, count }) => {
     <button onClick={onClick} aria-pressed={active} style={{
       display: "inline-flex", alignItems: "center", gap: 7,
       fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap",
-      background: active ? T.accent : T.panel, color: active ? "#fff" : T.dim,
+      background: active ? T.accent : T.panel, color: active ? T.onAccent : T.dim,
       border: `1px solid ${active ? T.blue : T.border}`,
     }}>
       {label}
       {count !== undefined && (
         <span style={{
           fontSize: 11.5, fontWeight: 700, minWidth: 18, textAlign: "center", padding: "1px 6px", borderRadius: 99,
-          background: active ? "rgba(0,0,0,.28)" : T.panelSoft, color: active ? "#fff" : T.faint,
+          background: active ? "rgba(127,127,127,.25)" : T.panelSoft, color: active ? T.onAccent : T.faint,
         }}>{count}</span>
       )}
     </button>
@@ -39,7 +39,7 @@ export const FW_GROUP = Object.fromEntries(FRAMEWORKS.map(f => [f.short, f.group
 export function ControlsBadge({ m }) {
   const T = useT();
   const pct = m.controlsRequired ? m.controlsInPlace / m.controlsRequired : 1;
-  const c = pct >= 1 ? (T.isDark ? "#34d399" : "#066a4d") : pct >= 0.7 ? (T.isDark ? "#f59e0b" : "#92400e") : (T.isDark ? "#ff8e9e" : "#be123c");
+  const c = pct >= 1 ? (T.isDark ? "#34d399" : "#066a4d") : pct >= 0.7 ? (T.isDark ? "#fbbf3c" : "#92400e") : (T.isDark ? "#ffadb8" : "#be123c");
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, whiteSpace: "nowrap" }}>
       <span style={{ width: 46, height: 6, borderRadius: 99, background: T.panelSoft, border: `1px solid ${T.border}`, overflow: "hidden", display: "inline-block" }}>
@@ -75,7 +75,7 @@ export function Registry({ agents, policies, audit, treatments, gates, openAgent
   return (
     <div>
       <PageHeader title="Agent Registry" subtitle="Directory of all deployed AI agents, with the frameworks and policies each one is in scope for.">
-        <button onClick={onOpenRegister} style={{ display: "flex", alignItems: "center", gap: 8, background: T.accent, border: "none", color: "#fff", borderRadius: 999, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={onOpenRegister} style={{ display: "flex", alignItems: "center", gap: 8, background: T.accent, border: "none", color: T.onAccent, borderRadius: 999, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
           <Plus size={16} /> Register Agent
         </button>
       </PageHeader>
@@ -172,7 +172,7 @@ export function Registry({ agents, policies, audit, treatments, gates, openAgent
                       <td style={{ padding: "14px 16px", fontSize: 14 }}>{a.dept}</td>
                       <td style={{ padding: "14px 16px" }}>
                         <StatePill agent={a} ctx={ctx} />
-                        {stepFor(a) && <div style={{ fontSize: 11.5, color: a.status === "suspended" || operatingState(a, ctx).state === "conflict" ? (T.isDark ? "#ff8e9e" : "#be123c") : T.faint, marginTop: 5, whiteSpace: "nowrap" }}>{stepFor(a)}</div>}
+                        {stepFor(a) && <div style={{ fontSize: 11.5, color: a.status === "suspended" || operatingState(a, ctx).state === "conflict" ? (T.isDark ? "#ffadb8" : "#be123c") : T.faint, marginTop: 5, whiteSpace: "nowrap" }}>{stepFor(a)}</div>}
                       </td>
                       <td style={{ padding: "14px 16px" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>

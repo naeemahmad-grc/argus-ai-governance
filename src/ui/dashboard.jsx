@@ -27,8 +27,8 @@ export function Dashboard({ agents, assessment, audit, treatments, gates, decisi
   }));
 
   const green = T.isDark ? "#34d399" : "#066a4d";
-  const red = T.isDark ? "#ff8e9e" : "#be123c";
-  const amber = T.isDark ? "#f59e0b" : "#92400e";
+  const red = T.isDark ? "#ffadb8" : "#be123c";
+  const amber = T.isDark ? "#fbbf3c" : "#92400e";
 
   const [cov, ful] = assessmentTiles(T, assessment);
   const kpis = [
@@ -108,7 +108,7 @@ export function Dashboard({ agents, assessment, audit, treatments, gates, decisi
 }
 
 export const coverageColor = (T, pct) =>
-  pct >= 80 ? (T.isDark ? "#34d399" : "#066a4d") : pct >= 60 ? (T.isDark ? "#f59e0b" : "#92400e") : (T.isDark ? "#ff8e9e" : "#be123c");
+  pct >= 80 ? (T.isDark ? "#34d399" : "#066a4d") : pct >= 60 ? (T.isDark ? "#fbbf3c" : "#92400e") : (T.isDark ? "#ffadb8" : "#be123c");
 
 export function CoverageBar({ label, covered, total, pct, fulfillment }) {
   const T = useT();

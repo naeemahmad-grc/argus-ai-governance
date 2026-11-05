@@ -84,7 +84,7 @@ export function ControlEvidence({ p, agents, onTest, onRevise }) {
   const [mode, setMode] = useState(null);
   const [summary, setSummary] = useState("");
   const [hist, setHist] = useState(false);
-  const green = T.isDark ? "#34d399" : "#066a4d", amber = T.isDark ? "#f59e0b" : "#92400e";
+  const green = T.isDark ? "#34d399" : "#066a4d", amber = T.isDark ? "#fbbf3c" : "#92400e";
   const attrs = attributes(p);
   const tests = [...(p.tests || [])].sort((a, b) => (b.testedOn > a.testedOn ? 1 : -1));
   const users = agents.filter(a => a.mapping.policies.some(m => m.id === p.id && !m.excluded));
@@ -126,7 +126,7 @@ export function ControlEvidence({ p, agents, onTest, onRevise }) {
         <ol style={{ listStyle: "none", padding: 0, margin: "8px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
           {tests.map(t => (
             <li key={t.id} style={{ fontSize: 12, lineHeight: 1.45, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "7px 9px" }}>
-              <b style={{ color: t.result === "pass" ? green : (T.isDark ? "#ff8e9e" : "#be123c") }}>{t.result === "pass" ? "Passed" : "Failed"}</b> {t.testedOn} on v{t.version || 1}
+              <b style={{ color: t.result === "pass" ? green : (T.isDark ? "#ffadb8" : "#be123c") }}>{t.result === "pass" ? "Passed" : "Failed"}</b> {t.testedOn} on v{t.version || 1}
               {t.scope !== "all" && <> · {agents.filter(a => t.scope.includes(a.id)).map(a => a.name).join(", ")} only</>}
               <div style={{ color: T.dim }}>{t.evidence}</div>
               <div style={{ color: T.faint }}>Owner {t.owner} · recorded by {t.by} · valid until {t.expiresOn}{t.synthetic ? " · synthetic" : ""}</div>
@@ -155,8 +155,8 @@ export const controlStatus = (id, policies, audit = [], agentName) => {
 
 export function ControlPill({ c }) {
   const T = useT();
-  const red = T.isDark ? "#ff8e9e" : "#be123c";
-  const amber = T.isDark ? "#f59e0b" : "#92400e";
+  const red = T.isDark ? "#ffadb8" : "#be123c";
+  const amber = T.isDark ? "#fbbf3c" : "#92400e";
   const st = c.state === "active" ? { fg: T.blue, bg: T.blueSoft, border: T.blueBorder }
     : c.state === "violated" || c.state === "failed" ? { fg: red, bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.4)" : "rgba(225,29,72,.3)" }
     : { fg: amber, bg: "transparent", border: T.isDark ? "rgba(245,158,11,.4)" : "rgba(180,83,9,.35)" };
@@ -166,7 +166,7 @@ export function ControlPill({ c }) {
 // The one action that moves a control toward "in place"
 export function ControlAction({ c, actions, small = true }) {
   const T = useT();
-  const btn = { display: "inline-flex", alignItems: "center", gap: 5, fontSize: small ? 12 : 13, fontWeight: 700, padding: small ? "4px 9px" : "6px 11px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" };
+  const btn = { display: "inline-flex", alignItems: "center", gap: 5, fontSize: small ? 12 : 13, fontWeight: 700, padding: small ? "4px 9px" : "6px 11px", borderRadius: 999, border: "none", background: T.accent, color: T.onAccent, cursor: "pointer", whiteSpace: "nowrap" };
   if (c.state === "missing" && c.template) return <button style={btn} onClick={() => actions.createPolicy(c.template.id)}><Plus size={12} /> Create from template</button>;
   if (c.state === "draft") return <button style={btn} onClick={() => actions.approve(c.id)}><BadgeCheck size={12} /> Approve</button>;
   if (c.state === "disabled") return <button style={btn} onClick={() => actions.togglePolicy(c.id)}>Enable policy</button>;
@@ -187,8 +187,8 @@ export function RiskScore({ s, label, big }) {
 
 export const GAP_STYLE = T => ({
   "Met": { fg: T.isDark ? "#34d399" : "#066a4d", bg: T.isDark ? "rgba(52,211,153,.1)" : "rgba(5,150,105,.08)", border: T.isDark ? "rgba(52,211,153,.35)" : "rgba(5,150,105,.3)" },
-  "Partially met": { fg: T.isDark ? "#f59e0b" : "#92400e", bg: T.isDark ? "rgba(245,158,11,.1)" : "rgba(180,83,9,.07)", border: T.isDark ? "rgba(245,158,11,.35)" : "rgba(180,83,9,.3)" },
-  "Not met": { fg: T.isDark ? "#ff8e9e" : "#be123c", bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.35)" : "rgba(225,29,72,.3)" },
+  "Partially met": { fg: T.isDark ? "#fbbf3c" : "#92400e", bg: T.isDark ? "rgba(245,158,11,.1)" : "rgba(180,83,9,.07)", border: T.isDark ? "rgba(245,158,11,.35)" : "rgba(180,83,9,.3)" },
+  "Not met": { fg: T.isDark ? "#ffadb8" : "#be123c", bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.35)" : "rgba(225,29,72,.3)" },
   "Not applicable": { fg: T.faint, bg: T.panelSoft, border: T.border },
 });
 export const GapPill = ({ status }) => { const T = useT(); const s = GAP_STYLE(T)[status]; return <Pill small fg={s.fg} bg={s.bg} border={s.border}>{status}</Pill>; };
@@ -217,7 +217,7 @@ export const SegTabs = ({ tabs, value, onChange }) => {
             setTimeout(() => list?.children[next]?.focus(), 0);
           }} style={{
           display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 999, padding: "7px 14px", fontSize: 13.5, fontWeight: 600,
-          cursor: "pointer", whiteSpace: "nowrap", background: value === id ? T.accent : "transparent", color: value === id ? "#fff" : T.dim,
+          cursor: "pointer", whiteSpace: "nowrap", background: value === id ? T.accent : "transparent", color: value === id ? T.onAccent : T.dim,
         }}>{icon}{label}</button>
       ))}
     </div>

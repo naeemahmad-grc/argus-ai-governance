@@ -35,7 +35,7 @@ export function AuditTrail({ audit, agents, policies, onOpenAgent, onOpenPolicy,
     (!f.q || [e.eid, e.desc, e.type, e.agent, e.actor?.name].join(" ").toLowerCase().includes(f.q.toLowerCase())));
   const filtered = Object.entries(f).some(([k, v]) => v && v !== "all");
   const sel = { ...fieldStyle(T), width: "auto", flex: T.mobile ? "1 1 45%" : "0 1 180px", padding: "8px 10px", fontSize: 13 };
-  const red = T.isDark ? "#ff8e9e" : "#be123c", green = T.isDark ? "#34d399" : "#066a4d";
+  const red = T.isDark ? "#ffadb8" : "#be123c", green = T.isDark ? "#34d399" : "#066a4d";
 
   const exportCsv = () => {
     downloadFile("argus-audit-trail.csv", toCSV([
@@ -115,7 +115,7 @@ export function AuditTrail({ audit, agents, policies, onOpenAgent, onOpenPolicy,
                         </td>
                         <td style={{ padding: "11px 12px", fontWeight: 600, fontSize: 13.5, whiteSpace: "nowrap" }}>{e.agent}</td>
                         <td style={{ padding: "11px 12px", fontSize: 13 }}>{e.actor?.name}<div style={{ color: T.faint, fontSize: 11.5 }}>{e.actor?.role}</div></td>
-                        <td style={{ padding: "11px 12px", fontSize: 12.5, fontWeight: 700, color: oc === "denied" ? red : oc === "detected" ? (T.isDark ? "#f59e0b" : "#92400e") : green }}>{OUTCOME_LABEL[oc]}</td>
+                        <td style={{ padding: "11px 12px", fontSize: 12.5, fontWeight: 700, color: oc === "denied" ? red : oc === "detected" ? (T.isDark ? "#fbbf3c" : "#92400e") : green }}>{OUTCOME_LABEL[oc]}</td>
                         <td style={{ padding: "11px 12px", fontSize: 13.5 }}>
                           {e.desc}
                           <div><button aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : e.eid)} style={{ ...linkBtn(T), marginTop: 4 }}>{isOpen ? "Hide details" : "Details"}</button></div>

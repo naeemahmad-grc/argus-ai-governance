@@ -7,51 +7,57 @@ import { X, Info, AlertOctagon, AlertCircle } from "lucide-react";
 export const THEMES = {
   dark: {
     isDark: true,
-    // Pulse soft cards, dark: navy page (#0B1F3B), lighter navy cards, periwinkle accent
-    bg: "#0B1F3B", sidebar: "#0B1F3B", panel: "#13294a", panelSoft: "#1a3358",
-    border: "#25416b", text: "#eef3fb", dim: "#b0bfd8",
-    faint: "#9cadca", blue: "#a9c0f2", accent: "#4a63b5", blueSoft: "rgba(143,166,230,.12)",
-    blueBorder: "rgba(143,166,230,.35)", avatarBg: "#25416b",
-    overlay: "rgba(3,10,22,.65)", shadow: "0 10px 30px rgba(3,10,22,.5)",
-    cardShadow: "0 1px 2px rgba(0,0,0,.18), 0 10px 30px rgba(3,10,22,.3)",
-    grid: "rgba(176,191,216,.14)", barCursor: "rgba(176,191,216,.06)",
-    navText: "#b0bfd8",
+    // Glass, dark: deep teal gradient, smoked-glass sheet and cards, white pill buttons
+    bg: "linear-gradient(135deg, #06131f 0%, #0a2131 55%, #0e2a3c 100%) fixed",
+    sidebar: "rgba(3,12,20,.45)", panel: "rgba(255,255,255,.07)", panelSoft: "rgba(255,255,255,.10)",
+    border: "rgba(255,255,255,.13)", text: "#eef5fb", dim: "#c3d3e0",
+    faint: "#b8cbda", blue: "#9ad6f7", accent: "#eef4f9", onAccent: "#0e1621", blueSoft: "rgba(124,196,239,.12)",
+    blueBorder: "rgba(124,196,239,.35)", avatarBg: "rgba(255,255,255,.14)",
+    overlay: "rgba(2,8,14,.6)", shadow: "0 20px 60px rgba(0,0,0,.45)",
+    cardShadow: "0 8px 28px rgba(0,0,0,.18)",
+    dialog: "rgba(9,27,41,.96)", blur: "blur(22px)",
+    sheet: { bg: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.10)", shadow: "0 20px 60px rgba(0,0,0,.35)" },
+    grid: "rgba(234,243,250,.14)", barCursor: "rgba(234,243,250,.06)",
+    navText: "#c3d3e0",
     risk: {
-      LOW: { bg: "rgba(52,211,153,.12)", fg: "#34d399", border: "rgba(52,211,153,.35)" },
-      MEDIUM: { bg: "rgba(234,179,8,.12)", fg: "#eab308", border: "rgba(234,179,8,.38)" },
-      HIGH: { bg: "rgba(249,115,22,.14)", fg: "#fb923c", border: "rgba(249,115,22,.42)" },
-      CRITICAL: { bg: "rgba(244,63,94,.14)", fg: "#ff8e9e", border: "rgba(244,63,94,.45)" },
+      LOW: { bg: "rgba(52,211,153,.12)", fg: "#5ee6b0", border: "rgba(52,211,153,.35)" },
+      MEDIUM: { bg: "rgba(234,179,8,.12)", fg: "#f5c842", border: "rgba(234,179,8,.38)" },
+      HIGH: { bg: "rgba(249,115,22,.14)", fg: "#fdae72", border: "rgba(249,115,22,.42)" },
+      CRITICAL: { bg: "rgba(244,63,94,.14)", fg: "#ffadb8", border: "rgba(244,63,94,.45)" },
     },
     status: {
-      active: { fg: "#34d399", bg: "rgba(52,211,153,.1)", border: "rgba(52,211,153,.3)" },
-      suspended: { fg: "#ff8e9e", bg: "rgba(244,63,94,.1)", border: "rgba(244,63,94,.35)" },
-      pending: { fg: "#94a3b8", bg: "rgba(148,163,184,.1)", border: "rgba(148,163,184,.3)" },
+      active: { fg: "#5ee6b0", bg: "rgba(52,211,153,.1)", border: "rgba(52,211,153,.3)" },
+      suspended: { fg: "#ffadb8", bg: "rgba(244,63,94,.1)", border: "rgba(244,63,94,.35)" },
+      pending: { fg: "#b8c5d6", bg: "rgba(148,163,184,.1)", border: "rgba(148,163,184,.3)" },
     },
     action: {
-      BLOCK: { fg: "#ff8e9e", bg: "rgba(244,63,94,.1)" },
-      "REQUIRE APPROVAL": { fg: "#8cbcfb", bg: "rgba(96,165,250,.1)" },
-      AUDIT: { fg: "#94a3b8", bg: "rgba(148,163,184,.1)" },
-      WARN: { fg: "#f59e0b", bg: "rgba(245,158,11,.12)" },
+      BLOCK: { fg: "#ffadb8", bg: "rgba(244,63,94,.1)" },
+      "REQUIRE APPROVAL": { fg: "#b3d4fd", bg: "rgba(96,165,250,.1)" },
+      AUDIT: { fg: "#b8c5d6", bg: "rgba(148,163,184,.1)" },
+      WARN: { fg: "#fbbf3c", bg: "rgba(245,158,11,.12)" },
     },
     bar: { LOW: "#34d399", MEDIUM: "#eab308", HIGH: "#f97316", CRITICAL: "#fb7185" },
     heat: s => s >= 80
       ? { bg: "rgba(244,63,94,.12)", border: "rgba(244,63,94,.5)", fg: "#fff", sub: "#fca5b3" }
       : s >= 25
-        ? { bg: "rgba(245,158,11,.10)", border: "rgba(245,158,11,.45)", fg: "#f59e0b", sub: "#f59e0b" }
-        : { bg: "rgba(52,211,153,.08)", border: "rgba(52,211,153,.4)", fg: "#34d399", sub: "#34d399" },
+        ? { bg: "rgba(245,158,11,.10)", border: "rgba(245,158,11,.45)", fg: "#fbbf3c", sub: "#fbbf3c" }
+        : { bg: "rgba(52,211,153,.08)", border: "rgba(52,211,153,.4)", fg: "#5ee6b0", sub: "#34d399" },
     warnBox: { bg: "rgba(245,158,11,.08)", border: "rgba(245,158,11,.3)", fg: "#fbbf24" },
   },
   light: {
     isDark: false,
-    // Pulse soft cards, light: cool grey-blue page, near-white floating cards, slate-navy accent
-    bg: "#e9eef6", sidebar: "#e9eef6", panel: "#f8fafd", panelSoft: "#eef2f8",
-    border: "#dde3ed", text: "#1b2233", dim: "#4f586b",
-    faint: "#5a6376", blue: "#3a4a85", accent: "#3d4b7c", blueSoft: "rgba(61,75,124,.08)",
-    blueBorder: "rgba(61,75,124,.3)", avatarBg: "#e1e6f1",
-    overlay: "rgba(15,23,42,.4)", shadow: "0 10px 30px rgba(40,52,90,.14)",
-    cardShadow: "0 1px 2px rgba(16,24,40,.04), 0 10px 30px rgba(40,52,90,.07)",
-    grid: "rgba(27,34,51,.08)", barCursor: "rgba(27,34,51,.04)",
-    navText: "#4f586b",
+    // Glass, light: teal-to-steel gradient, frosted dark sidebar, pale frosted sheet, black pill buttons
+    bg: "linear-gradient(135deg, #0f2e44 0%, #1c5070 50%, #4f86a6 100%) fixed",
+    sidebar: "rgba(8,28,44,.55)", panel: "rgba(255,255,255,.74)", panelSoft: "rgba(255,255,255,.55)",
+    border: "rgba(255,255,255,.75)", text: "#0f2235", dim: "#3d5366",
+    faint: "#43566a", blue: "#125787", accent: "#0e1621", onAccent: "#ffffff", blueSoft: "rgba(58,155,214,.10)",
+    blueBorder: "rgba(23,102,156,.32)", avatarBg: "rgba(58,155,214,.18)",
+    overlay: "rgba(6,22,36,.45)", shadow: "0 20px 60px rgba(4,20,36,.25)",
+    cardShadow: "0 8px 28px rgba(8,30,50,.08)",
+    dialog: "rgba(240,246,250,.97)", blur: "blur(22px)",
+    sheet: { bg: "rgba(232,241,248,.86)", border: "1px solid rgba(255,255,255,.55)", shadow: "0 20px 60px rgba(4,20,36,.25)" },
+    grid: "rgba(15,34,53,.08)", barCursor: "rgba(15,34,53,.04)",
+    navText: "#3d5366",
     risk: {
       LOW: { bg: "rgba(5,150,105,.10)", fg: "#066a4d", border: "rgba(5,150,105,.3)" },
       MEDIUM: { bg: "rgba(161,98,7,.10)", fg: "#854d0e", border: "rgba(161,98,7,.32)" },
@@ -78,6 +84,15 @@ export const THEMES = {
     warnBox: { bg: "rgba(180,83,9,.07)", border: "rgba(180,83,9,.3)", fg: "#92400e" },
   },
 };
+
+// Surfaces that sit directly on the gradient (sidebar, header, demo banner) use light-on-dark text in both modes.
+const ON_GLASS = {
+  isDark: true, text: "#eef6fb", dim: "#c9dceb", faint: "#c7d9e8", navText: "#d9e8f3", blue: "#cfe8fa",
+  panel: "rgba(255,255,255,.12)", panelSoft: "rgba(255,255,255,.16)", border: "rgba(255,255,255,.22)",
+  blueSoft: "rgba(6,22,36,.30)", blueBorder: "rgba(255,255,255,.22)",
+  accent: "rgba(124,196,239,.32)", onAccent: "#ffffff",
+};
+export const onGlass = T => ({ ...T, ...ON_GLASS, risk: THEMES.dark.risk, status: THEMES.dark.status });
 
 export const ThemeCtx = createContext(THEMES.dark);
 export const useT = () => useContext(ThemeCtx);
@@ -141,8 +156,8 @@ export const Pill = ({ children, fg, bg, border, small }) => (
 export const SevDot = ({ sev, size = 16 }) => {
   const T = useT();
   const map = {
-    critical: <AlertOctagon size={size} color={T.isDark ? "#ff8e9e" : "#be123c"} />,
-    warn: <AlertCircle size={size} color={T.isDark ? "#f59e0b" : "#92400e"} />,
+    critical: <AlertOctagon size={size} color={T.isDark ? "#ffadb8" : "#be123c"} />,
+    warn: <AlertCircle size={size} color={T.isDark ? "#fbbf3c" : "#92400e"} />,
     info: <Info size={size} color={T.isDark ? "#60a5fa" : "#1d4ed8"} />,
   };
   return map[sev] || map.info;
@@ -173,7 +188,7 @@ export function NotFound({ what, hint, onBack, backLabel = "Go back", page }) {
       <div style={{ color: T.dim, fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
         {hint || "The link may be mistyped, or it points at something that was removed."} Demo data also resets on refresh, so things created in an earlier session won't be here.
       </div>
-      {onBack && <button onClick={onBack} style={{ marginTop: 12, background: T.accent, color: "#fff", border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>{backLabel}</button>}
+      {onBack && <button onClick={onBack} style={{ marginTop: 12, background: T.accent, color: T.onAccent, border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>{backLabel}</button>}
     </div>
   );
 }
@@ -188,7 +203,7 @@ export const Toggle = ({ on, onChange }) => {
     }}>
       <span style={{
         position: "absolute", top: 3, left: on ? 23 : 3, width: 18, height: 18,
-        borderRadius: "50%", background: "#fff", transition: "left .15s",
+        borderRadius: "50%", background: on ? T.onAccent : "#fff", transition: "left .15s",
       }} />
     </button>
   );
@@ -204,7 +219,7 @@ export const Modal = ({ title, subtitle, onClose, children }) => {
     }}>
       <div ref={ref} {...dialogProps(title)} onClick={e => e.stopPropagation()} style={{
         width: "min(520px, 100%)", maxHeight: "90vh", overflowY: "auto",
-        background: T.panel, border: `1px solid ${T.border}`, borderRadius: 20, padding: 26,
+        background: T.dialog, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, border: `1px solid ${T.border}`, borderRadius: 20, padding: 26,
         boxSizing: "border-box", boxShadow: T.shadow,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -307,7 +322,7 @@ export function ViewSwitch({ value, onChange, label = "Display as" }) {
       {[["chart", "Chart"], ["table", "Table"]].map(([id, l]) => (
         <button key={id} aria-pressed={value === id} onClick={() => onChange(id)} style={{
           border: "none", borderRadius: 999, padding: "5px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-          background: value === id ? T.accent : "transparent", color: value === id ? "#fff" : T.dim,
+          background: value === id ? T.accent : "transparent", color: value === id ? T.onAccent : T.dim,
         }}>{l}</button>
       ))}
     </div>

@@ -97,7 +97,7 @@ export function RegisterAgentModal({ onClose, onRegister, policies }) {
           </div>
         )}
         <button disabled={!valid} onClick={() => onRegister(f)} style={{
-          background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
+          background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? T.onAccent : T.faint,
           border: "none", borderRadius: 14, padding: "12px 16px", fontSize: 15, fontWeight: 700,
           cursor: valid ? "pointer" : "not-allowed", marginTop: 4,
         }}>
@@ -171,7 +171,7 @@ export function DocUpload({ doc, onChange }) {
       )}
       {busy && <div role="status" style={{ color: T.dim, fontSize: 12.5, marginTop: 6 }}>Reading the file and computing its SHA-256 fingerprint…</div>}
       {err && (
-        <div role="alert" style={{ color: T.isDark ? "#ff8e9e" : "#be123c", fontSize: 12.5, marginTop: 6 }}>
+        <div role="alert" style={{ color: T.isDark ? "#ffadb8" : "#be123c", fontSize: 12.5, marginTop: 6 }}>
           {err} {last && <button onClick={() => ingest(last)} style={{ background: "none", border: "none", color: T.blue, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 12.5 }}>Retry</button>}
         </div>
       )}
@@ -199,7 +199,7 @@ export function ApprovalFields({ owner, approvedBy, approvedOn, onChange, record
         </select>
         {!recorded && <NotAllowed action="policy.approve" ctx={{ owner, requester }} compact />}
         {sameAsOwner && (
-          <div style={{ color: T.isDark ? "#f59e0b" : "#92400e", fontSize: 12.5, marginTop: 6, lineHeight: 1.45 }}>
+          <div style={{ color: T.isDark ? "#fbbf3c" : "#92400e", fontSize: 12.5, marginTop: 6, lineHeight: 1.45 }}>
             The approver should be independent of the policy owner. Choose a different role.
           </div>
         )}
@@ -342,7 +342,7 @@ export function CreatePolicyModal({ onClose, onCreate, initialTemplate, policies
         )}
 
         <button disabled={!valid} onClick={() => onCreate(f)} style={{
-          background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
+          background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? T.onAccent : T.faint,
           border: "none", borderRadius: 14, padding: "12px 16px", fontSize: 15, fontWeight: 700,
           cursor: valid ? "pointer" : "not-allowed", marginTop: 4,
         }}>
@@ -371,7 +371,7 @@ export function ApprovePolicyModal({ policy, onClose, onApprove }) {
           <DocUpload doc={a.doc} onChange={doc => set({ doc })} />
         </div>
         <button disabled={!valid} onClick={() => onApprove(policy.id, a)} style={{
-          background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
+          background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? T.onAccent : T.faint,
           border: "none", borderRadius: 14, padding: "12px 16px", fontSize: 15, fontWeight: 700, cursor: valid ? "pointer" : "not-allowed",
         }}>
           Approve policy

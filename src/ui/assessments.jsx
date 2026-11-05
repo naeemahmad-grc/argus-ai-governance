@@ -52,7 +52,7 @@ export function RiskMatrix({ items, scoreKey, title, cell, onCell }) {
                   title={`Likelihood ${l} (${LIKELIHOOD[l - 1]}) × impact ${i} (${IMPACT[i - 1]}) = ${l * i}`}
                   style={{
                     aspectRatio: "1.35", borderRadius: 6, border: sel ? `2px solid ${T.text}` : "1px solid transparent",
-                    background: T.bar[lv], opacity: n ? 0.92 : 0.16, color: "#0b1120", fontWeight: 800, fontSize: 13,
+                    background: T.bar[lv], opacity: n ? 0.92 : 0.16, color: lv === "CRITICAL" && !T.isDark ? "#fff" : "#0b1120", fontWeight: 800, fontSize: 13,
                     cursor: n ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
                   }}>{n || ""}</button>
               );
@@ -81,7 +81,7 @@ export function RiskScenarioDrawer({ entry, treatment, policies, audit, actions,
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: T.overlay, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
-      <div ref={dialogRef} {...dialogProps(`${entry.id} ${entry.title}`)} onClick={e => e.stopPropagation()} style={{ width: "min(560px, 100%)", height: "100%", background: T.panel, borderLeft: `1px solid ${T.border}`, padding: T.mobile ? 18 : 26, overflowY: "auto", boxSizing: "border-box" }}>
+      <div ref={dialogRef} {...dialogProps(`${entry.id} ${entry.title}`)} onClick={e => e.stopPropagation()} style={{ width: "min(560px, 100%)", height: "100%", background: T.dialog, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, borderLeft: `1px solid ${T.border}`, padding: T.mobile ? 18 : 26, overflowY: "auto", boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: T.faint, fontFamily: "ui-monospace, monospace" }}>{entry.id} · {entry.category}</div>
@@ -108,7 +108,7 @@ export function RiskScenarioDrawer({ entry, treatment, policies, audit, actions,
             {worst.controls.map(c => (
               <div key={c.id} style={{ color: c.active ? T.text : T.dim }}>
                 {c.name}: {[c.l && `−${c.l} likelihood`, c.i && `−${c.i} impact`].filter(Boolean).join(", ")}{" "}
-                <span style={{ color: c.active ? (T.isDark ? "#34d399" : "#066a4d") : c.violated ? (T.isDark ? "#ff8e9e" : "#be123c") : (T.isDark ? "#f59e0b" : "#92400e"), fontWeight: 600 }}>
+                <span style={{ color: c.active ? (T.isDark ? "#34d399" : "#066a4d") : c.violated ? (T.isDark ? "#ffadb8" : "#be123c") : (T.isDark ? "#fbbf3c" : "#92400e"), fontWeight: 600 }}>
                   ({c.active ? "in place" : c.violated ? "violated by this agent, no credit" : `${CONTROL_LABEL[c.state].toLowerCase()}, no credit`})
                 </span>
               </div>
@@ -188,7 +188,7 @@ export function RiskScenarioDrawer({ entry, treatment, policies, audit, actions,
             </div>
           )}
           <button disabled={!valid} onClick={save} style={{
-            marginTop: 14, width: "100%", background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
+            marginTop: 14, width: "100%", background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? T.onAccent : T.faint,
             border: "none", borderRadius: 14, padding: "11px 16px", fontSize: 14.5, fontWeight: 700, cursor: valid ? "pointer" : "not-allowed",
           }}>Save treatment</button>
         </DrawerSection>
@@ -228,7 +228,7 @@ export function RiskRegister({ register, treatments, onOpen }) {
 
   const stats = [
     ["Scenarios assessed", register.length, T.text],
-    ["High or critical residual", highCrit, highCrit ? (T.isDark ? "#ff8e9e" : "#be123c") : T.text],
+    ["High or critical residual", highCrit, highCrit ? (T.isDark ? "#ffadb8" : "#be123c") : T.text],
     ["Risk reduced by controls", `${sumI ? Math.round((1 - sumR / sumI) * 100) : 0}%`, T.isDark ? "#34d399" : "#066a4d"],
     ["Accepted risks", accepted, T.text],
   ];
@@ -383,7 +383,7 @@ export function GapAssessment({ assessment, policies, actions, onGapField, onMar
     if (naFor === r.key) return (
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
         <input autoFocus value={naReason} onChange={e => setNaReason(e.target.value)} placeholder="Reason (required, logged)" style={{ ...fieldStyle(T), flex: "1 1 180px", padding: "6px 8px", fontSize: 12.5 }} />
-        <button disabled={!naReason.trim()} onClick={() => { onMarkNA(r.key, naReason.trim()); setNaFor(null); setNaReason(""); }} style={{ fontSize: 12.5, fontWeight: 700, padding: "6px 10px", borderRadius: 10, border: "none", background: naReason.trim() ? T.accent : "rgba(148,163,184,.25)", color: naReason.trim() ? "#fff" : T.faint, cursor: naReason.trim() ? "pointer" : "not-allowed" }}>Save</button>
+        <button disabled={!naReason.trim()} onClick={() => { onMarkNA(r.key, naReason.trim()); setNaFor(null); setNaReason(""); }} style={{ fontSize: 12.5, fontWeight: 700, padding: "6px 10px", borderRadius: 10, border: "none", background: naReason.trim() ? T.accent : "rgba(148,163,184,.25)", color: naReason.trim() ? T.onAccent : T.faint, cursor: naReason.trim() ? "pointer" : "not-allowed" }}>Save</button>
         <button onClick={() => { setNaFor(null); setNaReason(""); }} style={{ fontSize: 12.5, padding: "6px 10px", borderRadius: 999, border: `1px solid ${T.border}`, background: "transparent", color: T.dim, cursor: "pointer" }}>Cancel</button>
       </div>
     );
@@ -634,7 +634,7 @@ export function AssessmentReport(props) {
         <div style={{ fontSize: 13.5, color: T.dim, flex: "1 1 300px", lineHeight: 1.5 }}>
           A point-in-time summary of the risk register and gap assessment, ready to share with leadership or auditors.
         </div>
-        <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: 8, background: T.accent, border: "none", color: "#fff", borderRadius: 999, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: 8, background: T.accent, border: "none", color: T.onAccent, borderRadius: 999, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
           <Printer size={15} /> Print or save as PDF
         </button>
       </div>

@@ -23,7 +23,7 @@ export function Frameworks({ assessment, gapKeys, policies, onOpen, onAdopt }) {
   const summary = [
     ...assessmentTiles(T, assessment),
     { label: "Frameworks tracked", value: frameworks.length, color: T.text, sub: `${assessment.total} curated requirements, ${assessment.na} excluded` },
-    { label: "Unmapped requirements", value: assessment.unmapped, color: T.isDark ? "#f59e0b" : "#92400e", sub: "Applicable requirements with no live control" },
+    { label: "Unmapped requirements", value: assessment.unmapped, color: T.isDark ? "#fbbf3c" : "#92400e", sub: "Applicable requirements with no live control" },
   ];
 
   return (
@@ -69,7 +69,7 @@ export function Frameworks({ assessment, gapKeys, policies, onOpen, onAdopt }) {
               </div>
               <div style={{ marginTop: "auto" }}>
                 <CoverageBar label={f.maturity ? `Indicative level ${level} of 5` : "Mapped coverage"} covered={f.mapped} total={f.applicable} pct={f.coveragePct} fulfillment={f.fulfillmentPct} />
-                <div style={{ color: gaps ? (T.isDark ? "#f59e0b" : "#92400e") : T.faint, fontSize: 12.5, marginTop: 8 }}>
+                <div style={{ color: gaps ? (T.isDark ? "#fbbf3c" : "#92400e") : T.faint, fontSize: 12.5, marginTop: 8 }}>
                   {f.applicable === 0 ? "No agent in scope" : gaps ? `${gaps} unmapped requirement${gaps > 1 ? "s" : ""}` : "Every applicable requirement mapped"}
                   {f.na > 0 && f.applicable > 0 && <span style={{ color: T.faint }}> · {f.na} excluded</span>}
                 </div>
@@ -114,7 +114,7 @@ export function RecommendedControl({ tpl, reqKey, gapKeys, policies, onAdopt }) 
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 11 }}>
         <button onClick={() => onAdopt(tpl)} style={{
           display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
-          padding: "8px 12px", borderRadius: 999, cursor: "pointer", background: T.accent, color: "#fff", border: "none",
+          padding: "8px 12px", borderRadius: 999, cursor: "pointer", background: T.accent, color: T.onAccent, border: "none",
         }}>
           {existing
             ? (existing.status === "draft" ? <><BadgeCheck size={14} /> Approve this policy</> : <><Plus size={14} /> {existing.enabled ? "Map this policy" : "Enable and map this policy"}</>)
@@ -163,7 +163,7 @@ export function RecommendationPlan({ gapKeys, policies, onAdopt, totalGaps }) {
                   <Pill small fg={a.fg} bg={a.bg}>{t.action}</Pill>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 7, alignItems: "center" }}>
-                  <span style={{ fontSize: 12.5, color: T.isDark ? "#f59e0b" : "#92400e", fontWeight: 700 }}>
+                  <span style={{ fontSize: 12.5, color: T.isDark ? "#fbbf3c" : "#92400e", fontWeight: 700 }}>
                     Closes {open.length} gap{open.length > 1 ? "s" : ""}:
                   </span>
                   {open.map(k => <Pill key={k} small fg={T.dim} bg={T.panel} border={T.border}>{reqLabel(k)}</Pill>)}
@@ -179,7 +179,7 @@ export function RecommendationPlan({ gapKeys, policies, onAdopt, totalGaps }) {
                 </a>
                 <button onClick={() => onAdopt(t)} style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13, fontWeight: 700,
-                  padding: "8px 12px", borderRadius: 999, cursor: "pointer", background: T.accent, color: "#fff", border: "none", whiteSpace: "nowrap",
+                  padding: "8px 12px", borderRadius: 999, cursor: "pointer", background: T.accent, color: T.onAccent, border: "none", whiteSpace: "nowrap",
                   flex: T.mobile ? 1 : "none",
                 }}>
                   {existing?.status === "draft" ? <><BadgeCheck size={14} /> Approve</> : <><Plus size={14} /> {existing ? "Enable and map" : "Create"}</>}
@@ -206,14 +206,14 @@ export function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink,
   const f = framework;
   const byId = Object.fromEntries(policies.map(p => [p.id, p]));
   const green = T.isDark ? "#34d399" : "#066a4d";
-  const amber = T.isDark ? "#f59e0b" : "#92400e";
+  const amber = T.isDark ? "#fbbf3c" : "#92400e";
   const level = Math.max(1, Math.min(5, 1 + Math.round(((f.coveragePct ?? 0) / 100) * 4)));
   const GS = GAP_STYLE(T);
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: T.overlay, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
       <div ref={dialogRef} {...dialogProps(`${f.name} requirements`)} onClick={e => e.stopPropagation()} style={{
-        width: "min(560px, 100%)", height: "100%", background: T.panel, borderLeft: `1px solid ${T.border}`,
+        width: "min(560px, 100%)", height: "100%", background: T.dialog, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, borderLeft: `1px solid ${T.border}`,
         padding: T.mobile ? 18 : 26, overflowY: "auto", boxSizing: "border-box",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
@@ -289,12 +289,12 @@ export function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink,
                     {gapOpen && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                         {disabledOnly && linkedPolicies.filter(p => p.status === "draft").map(p => (
-                          <button key={`a-${p.id}`} onClick={() => onApprove(p.id)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 999, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>
+                          <button key={`a-${p.id}`} onClick={() => onApprove(p.id)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 999, cursor: "pointer", background: T.accent, color: T.onAccent, border: "none" }}>
                             <BadgeCheck size={13} /> Approve {p.name}
                           </button>
                         ))}
                         {disabledOnly && linkedPolicies.filter(p => !p.enabled && p.status !== "draft").map(p => (
-                          <button key={p.id} onClick={() => onTogglePolicy(p.id)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 999, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>
+                          <button key={p.id} onClick={() => onTogglePolicy(p.id)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 999, cursor: "pointer", background: T.accent, color: T.onAccent, border: "none" }}>
                             Enable {p.name}
                           </button>
                         ))}

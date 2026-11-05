@@ -195,13 +195,13 @@ export const componentRisk = (comp, riskById) => {
   const rs = comp.risks.map(id => riskById[id]).filter(Boolean);
   return { rs, worst: rs.length ? Math.max(...rs.map(r => r.residual.score)) : null };
 };
-export const statusColor = (T, worst) => worst === null ? T.faint : worst >= 10 ? (T.isDark ? "#ff8e9e" : "#be123c") : worst >= 5 ? (T.isDark ? "#f59e0b" : "#92400e") : (T.isDark ? "#34d399" : "#066a4d");
+export const statusColor = (T, worst) => worst === null ? T.faint : worst >= 10 ? (T.isDark ? "#ffadb8" : "#be123c") : worst >= 5 ? (T.isDark ? "#fbbf3c" : "#92400e") : (T.isDark ? "#34d399" : "#066a4d");
 
 export function ArchDiagram({ arch, riskById, selected, onSelect }) {
   const T = useT();
   const L = useMemo(() => computeDiagram(arch), [arch]);
   const edges = L.edges;
-  const red = T.isDark ? "#ff8e9e" : "#be123c";
+  const red = T.isDark ? "#ffadb8" : "#be123c";
   const linked = e => selected && (e.from === selected || e.to === selected);
   const ordered = [...edges].sort((a, b) => Number(linked(a)) - Number(linked(b)));
   const edgeColor = e => e.violation ? red : linked(e) ? T.blue : T.dim;
@@ -276,7 +276,7 @@ export function ArchDiagram({ arch, riskById, selected, onSelect }) {
 // Phones: lanes as stacked groups plus a numbered flow list
 export function ArchStacked({ arch, riskById, selected, onSelect }) {
   const T = useT();
-  const red = T.isDark ? "#ff8e9e" : "#be123c";
+  const red = T.isDark ? "#ffadb8" : "#be123c";
   const name = id => arch.components.find(c => c.id === id)?.name;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -320,7 +320,7 @@ export function ComponentDetail({ comp, arch, riskById, policies, audit, agent, 
   const { rs } = componentRisk(comp, riskById);
   const name = id => arch.components.find(c => c.id === id)?.name;
   const flows = arch.flows.filter(f => f.from === comp.id || f.to === comp.id);
-  const red = T.isDark ? "#ff8e9e" : "#be123c";
+  const red = T.isDark ? "#ffadb8" : "#be123c";
   return (
     <div style={{ marginTop: 12, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, padding: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
@@ -371,7 +371,7 @@ export function ComponentDetail({ comp, arch, riskById, policies, audit, agent, 
 
 export function WorkflowView({ arch, policies, audit, agent, actions }) {
   const T = useT();
-  const red = T.isDark ? "#ff8e9e" : "#be123c";
+  const red = T.isDark ? "#ffadb8" : "#be123c";
   const green = T.isDark ? "#34d399" : "#066a4d";
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
@@ -449,7 +449,7 @@ export function ArchitectureTab({ agent, policies, audit, actions }) {
   const [view, setView] = useState("diagram");
   const [sel, setSel] = useState(null);
   const comp = sel && arch.components.find(c => c.id === sel);
-  const red = T.isDark ? "#ff8e9e" : "#be123c";
+  const red = T.isDark ? "#ffadb8" : "#be123c";
   const legend = [
     [statusColor(T, 12), "High or critical residual risk"], [statusColor(T, 6), "Medium"], [statusColor(T, 2), "Low"], [T.faint, "No risk placed"],
   ];

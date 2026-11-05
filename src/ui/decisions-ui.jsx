@@ -81,7 +81,7 @@ export function RecentAlerts({ audit, agents, openAgent }) {
   const T = useT();
   const byName = Object.fromEntries(agents.map(a => [a.name, a]));
   const events = [...audit].filter(e => e.sev === "critical" || e.sev === "warn").sort((x, y) => y.at - x.at).slice(0, 6);
-  const green = T.isDark ? "#34d399" : "#066a4d", red = T.isDark ? "#ff8e9e" : "#be123c";
+  const green = T.isDark ? "#34d399" : "#066a4d", red = T.isDark ? "#ffadb8" : "#be123c";
   const stateOf = e => {
     const a = byName[e.agent];
     if (!a) return null;
@@ -287,7 +287,7 @@ export function Decisions({ items, gates, onGates, onAction }) {
   const meta = (k, v, warn) => (
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11, color: T.faint, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>{k}</div>
-      <div style={{ fontSize: 13, marginTop: 2, color: warn ? (T.isDark ? "#ff8e9e" : "#be123c") : T.text, fontWeight: warn ? 700 : 400 }}>{v}</div>
+      <div style={{ fontSize: 13, marginTop: 2, color: warn ? (T.isDark ? "#ffadb8" : "#be123c") : T.text, fontWeight: warn ? 700 : 400 }}>{v}</div>
     </div>
   );
   return (

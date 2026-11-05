@@ -122,9 +122,9 @@ export function RiskRadar({ agents, openAgent }) {
           return (
             <g key={v}>
               <circle cx={CX} cy={CY} r={rr} fill="none"
-                stroke={crit ? (T.isDark ? "#ff8e9e" : "#be123c") : T.grid}
+                stroke={crit ? (T.isDark ? "#ffadb8" : "#be123c") : T.grid}
                 strokeWidth={crit ? 1.4 : 1} strokeDasharray={crit ? "5 5" : "none"} opacity={crit ? 0.55 : 1} />
-              <text x={CX + 6} y={CY - rr - 5} fontSize={10 * fs} fill={crit ? (T.isDark ? "#ff8e9e" : "#be123c") : T.faint}>
+              <text x={CX + 6} y={CY - rr - 5} fontSize={10 * fs} fill={crit ? (T.isDark ? "#ffadb8" : "#be123c") : T.faint}>
                 {crit ? "critical threshold" : v}
               </text>
             </g>
@@ -211,7 +211,7 @@ export function Heatmap({ agents, openAgent }) {
             <button key={id} aria-pressed={mode === id} onClick={() => setMode(id)} style={{
               border: "none", borderRadius: 999, padding: "7px 16px", fontSize: 13.5, fontWeight: 600,
               cursor: "pointer", background: mode === id ? T.accent : "transparent",
-              color: mode === id ? "#fff" : T.dim, transition: "all .12s",
+              color: mode === id ? T.onAccent : T.dim, transition: "all .12s",
             }}>{label}</button>
           ))}
         </div>

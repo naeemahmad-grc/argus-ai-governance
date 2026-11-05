@@ -10,9 +10,9 @@ import { ControlAction, ControlPill, RiskScore, addDays, controlStatus } from ".
 /* ---------------- agent lifecycle (activation & reinstatement) ---------------- */
 
 export const btnStyle = (T, primary = true, enabled = true) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 12, whiteSpace: "nowrap",
+  display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 999, whiteSpace: "nowrap",
   border: primary ? "none" : `1px solid ${T.border}`, cursor: enabled ? "pointer" : "not-allowed",
-  background: !enabled ? "rgba(148,163,184,.25)" : primary ? T.accent : "transparent", color: !enabled ? T.faint : primary ? "#fff" : T.dim,
+  background: !enabled ? "rgba(148,163,184,.25)" : primary ? T.accent : "transparent", color: !enabled ? T.faint : primary ? T.onAccent : T.dim,
 });
 
 export function InlineForm({ fields, submitLabel, onSubmit }) {
@@ -106,7 +106,7 @@ export function RequirementSubs({ item, agent, policies, audit, actions, life })
 export function RequirementRow({ item, agent, policies, audit, actions, life, onShowTab }) {
   const T = useT();
   const green = T.isDark ? "#34d399" : "#066a4d";
-  const amber = T.isDark ? "#f59e0b" : "#92400e";
+  const amber = T.isDark ? "#fbbf3c" : "#92400e";
   const showSubs = !item.met && item.subs?.length || item.id === "rootcause" || item.id === "retest";
   return (
     <div style={{ display: "flex", gap: 10, padding: "11px 0", borderTop: `1px solid ${T.border}` }}>
@@ -204,7 +204,7 @@ export function ApprovalPanel({ agent, req, life }) {
 
 export function LifecycleCard({ agent, policies, audit, treatments, gates, actions, life, onShowTab }) {
   const T = useT();
-  const red = T.isDark ? "#ff8e9e" : "#be123c";
+  const red = T.isDark ? "#ffadb8" : "#be123c";
   const green = T.isDark ? "#34d399" : "#066a4d";
   const ctx = { audit, treatments, gates };
 
@@ -225,7 +225,7 @@ export function LifecycleCard({ agent, policies, audit, treatments, gates, actio
               const it = act.items.find(i => i.id === id);
               return it && (
                 <div key={id} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, fontSize: 13 }}>
-                  {it.met ? <CheckCircle2 size={15} color={green} /> : <Clock size={15} color={T.isDark ? "#f59e0b" : "#92400e"} />}
+                  {it.met ? <CheckCircle2 size={15} color={green} /> : <Clock size={15} color={T.isDark ? "#fbbf3c" : "#92400e"} />}
                   <span style={{ color: it.met ? T.dim : T.text }}>{it.label}</span>
                 </div>
               );

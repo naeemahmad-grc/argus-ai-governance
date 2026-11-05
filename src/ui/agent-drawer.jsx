@@ -27,7 +27,7 @@ export function MappingRow({ item, kind, onExclude, onInclude, action }) {
   const [excluding, setExcluding] = useState(false);
   const [reason, setReason] = useState("");
   const green = T.isDark ? "#34d399" : "#066a4d";
-  const amber = T.isDark ? "#f59e0b" : "#92400e";
+  const amber = T.isDark ? "#fbbf3c" : "#92400e";
   const st = kind === "policy" ? POLICY_STATE[item.state] : null;
   const ex = item.excluded;
 
@@ -63,7 +63,7 @@ export function MappingRow({ item, kind, onExclude, onInclude, action }) {
               <div style={{ display: "flex", gap: 8 }}>
                 <button disabled={!reason.trim()} onClick={() => { onExclude(item.key, reason.trim()); setExcluding(false); setReason(""); }} style={{
                   fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 10, border: "none",
-                  background: reason.trim() ? T.accent : "rgba(148,163,184,.25)", color: reason.trim() ? "#fff" : T.faint,
+                  background: reason.trim() ? T.accent : "rgba(148,163,184,.25)", color: reason.trim() ? T.onAccent : T.faint,
                   cursor: reason.trim() ? "pointer" : "not-allowed",
                 }}>Exclude</button>
                 <button onClick={() => { setExcluding(false); setReason(""); }} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 11px", borderRadius: 999, border: `1px solid ${T.border}`, background: "transparent", color: T.dim, cursor: "pointer" }}>Cancel</button>
@@ -106,15 +106,15 @@ export function AgentDrawer({ agent, audit, policies, actions, treatments, gates
 
   const policyAction = p => {
     if (p.state === "missing" && p.template) return (
-      <button onClick={() => actions.createPolicy(p.template.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>
+      <button onClick={() => actions.createPolicy(p.template.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 8, border: "none", background: T.accent, color: T.onAccent, cursor: "pointer" }}>
         <Plus size={12} /> Create from template
       </button>);
     if (p.state === "draft") return (
-      <button onClick={() => actions.approve(p.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>
+      <button onClick={() => actions.approve(p.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 8, border: "none", background: T.accent, color: T.onAccent, cursor: "pointer" }}>
         <BadgeCheck size={12} /> Approve
       </button>);
     if (p.state === "disabled") return (
-      <button onClick={() => actions.togglePolicy(p.id)} style={{ fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>
+      <button onClick={() => actions.togglePolicy(p.id)} style={{ fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 8, border: "none", background: T.accent, color: T.onAccent, cursor: "pointer" }}>
         Enable policy
       </button>);
     return null;
@@ -130,7 +130,7 @@ export function AgentDrawer({ agent, audit, policies, actions, treatments, gates
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: T.overlay, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
       <div ref={dialogRef} {...dialogProps(`${agent.name} details`)} onClick={e => e.stopPropagation()} style={{
-        width: view === "architecture" && !T.mobile ? "min(900px, 100%)" : "min(540px, 100%)", height: "100%", background: T.panel, transition: "width .2s",
+        width: view === "architecture" && !T.mobile ? "min(900px, 100%)" : "min(540px, 100%)", height: "100%", background: T.dialog, backdropFilter: T.blur, WebkitBackdropFilter: T.blur, transition: "width .2s",
         borderLeft: `1px solid ${T.border}`, padding: T.mobile ? 18 : 26, overflowY: "auto", boxSizing: "border-box",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -174,7 +174,7 @@ export function AgentDrawer({ agent, audit, policies, actions, treatments, gates
             <>
               <TraitPicker traits={draftTraits} onChange={setDraftTraits} />
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button onClick={() => { onUpdateTraits(agent.id, draftTraits); setEditing(false); }} style={{ fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 999, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>Save and remap</button>
+                <button onClick={() => { onUpdateTraits(agent.id, draftTraits); setEditing(false); }} style={{ fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 999, border: "none", background: T.accent, color: T.onAccent, cursor: "pointer" }}>Save and remap</button>
                 <button onClick={() => setEditing(false)} style={{ fontSize: 13, fontWeight: 600, padding: "7px 12px", borderRadius: 999, border: `1px solid ${T.border}`, background: "transparent", color: T.dim, cursor: "pointer" }}>Cancel</button>
               </div>
             </>

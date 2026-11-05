@@ -540,7 +540,7 @@ export default function ArgusMVP() {
         {NAV.map(n => (
           <button key={n.id} onClick={() => go(n.id)} aria-current={view === n.id ? "page" : undefined} aria-label={n.badge ? `${n.label}, ${n.badge} critical` : undefined} style={{
             display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", whiteSpace: "nowrap",
-            borderRadius: 9, border: "none", cursor: "pointer", fontSize: 14.5, fontWeight: 500,
+            borderRadius: 14, border: "none", cursor: "pointer", fontSize: 14.5, fontWeight: 500,
             background: view === n.id ? T.accent : "transparent",
             color: view === n.id ? "#fff" : T.navText, textAlign: "left", transition: "background .12s",
           }}>
@@ -583,7 +583,7 @@ export default function ArgusMVP() {
           <div role="region" aria-label="Demo notice" style={{
             display: "flex", alignItems: "center", gap: 10, padding: `8px ${px}px`,
             background: T.blueSoft, borderBottom: `1px solid ${T.blueBorder}`,
-            fontSize: mobile ? 12 : 13, color: T.isDark ? "#9ec8f2" : "#1d5c9e",
+            fontSize: mobile ? 12 : 13, color: T.blue,
           }}>
             <Info size={14} style={{ flexShrink: 0 }} aria-hidden="true" />
             <span style={{ flex: 1, lineHeight: 1.4 }}>
@@ -593,7 +593,7 @@ export default function ArgusMVP() {
             </span>
             <button onClick={resetDemo} style={{
               display: "flex", alignItems: "center", gap: 6, background: "transparent",
-              border: `1px solid ${T.blueBorder}`, color: "inherit", borderRadius: 7,
+              border: `1px solid ${T.blueBorder}`, color: "inherit", borderRadius: 999,
               padding: "5px 10px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
             }}>
               <RotateCcw size={13} /> Reset{mobile ? "" : " demo"}
@@ -605,7 +605,7 @@ export default function ArgusMVP() {
               <>
                 <button onClick={() => setNavOpen(true)} aria-label="Open menu" style={{
                   display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, flexShrink: 0,
-                  borderRadius: 10, cursor: "pointer", background: T.panel, border: `1px solid ${T.border}`, color: T.text,
+                  borderRadius: 14, cursor: "pointer", background: T.panel, border: `1px solid ${T.border}`, color: T.text,
                 }}><Menu size={18} /></button>
                 <PanoptesMark size={26} color={T.text} />
               </>
@@ -614,9 +614,9 @@ export default function ArgusMVP() {
               <Search size={16} color={T.faint} style={{ position: "absolute", left: 14, top: 12, zIndex: 1 }} />
               <input value={globalQ} onChange={e => setGlobalQ(e.target.value)} aria-label="Search agents" type="search"
                 placeholder={mobile ? "Search agents..." : "Global search agents, logs, policies..."}
-                style={{ ...fieldStyle(T), background: T.panel, borderRadius: 10, padding: "11px 14px 11px 40px" }} />
+                style={{ ...fieldStyle(T), background: T.panel, borderRadius: 14, padding: "11px 14px 11px 40px" }} />
               {globalHits.length > 0 && (
-                <div style={{ position: "absolute", top: 46, left: 0, right: 0, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, zIndex: 40, overflow: "hidden", boxShadow: T.shadow }}>
+                <div style={{ position: "absolute", top: 46, left: 0, right: 0, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, zIndex: 40, overflow: "hidden", boxShadow: T.shadow }}>
                   {globalHits.map(a => (
                     <button key={a.id} onClick={() => { setDetailId(a.id); setGlobalQ(""); }} style={{
                       display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center",
@@ -634,7 +634,7 @@ export default function ArgusMVP() {
               aria-label={T.isDark ? "Switch to light mode" : "Switch to dark mode"}
               style={{
                 marginLeft: "auto", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                width: 38, height: 38, borderRadius: 10, cursor: "pointer",
+                width: 38, height: 38, borderRadius: 14, cursor: "pointer",
                 background: T.panel, border: `1px solid ${T.border}`, color: T.dim, transition: "all .15s",
               }}>
               {T.isDark ? <Sun size={17} /> : <Moon size={17} />}
@@ -642,7 +642,7 @@ export default function ArgusMVP() {
             {!mobile && (
               <div style={{ position: "relative" }} aria-hidden="true">
                 <Bell size={19} color={T.dim} />
-                <span style={{ position: "absolute", top: -2, right: -2, width: 8, height: 8, borderRadius: "50%", background: T.isDark ? "#fb7185" : "#be123c" }} />
+                <span style={{ position: "absolute", top: -2, right: -2, width: 8, height: 8, borderRadius: "50%", background: T.isDark ? "#ff8e9e" : "#be123c" }} />
               </div>
             )}
           </header>
@@ -703,12 +703,12 @@ export default function ArgusMVP() {
         {feedbackOpen && (
           <Modal title="Help shape ARGUS" subtitle="This is an early MVP exploring what agentic AI governance tooling should look like. Two minutes of your perspective directly shapes what gets built next." onClose={() => setFeedbackOpen(false)}>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "14px 16px", fontSize: 13.5, color: T.dim, lineHeight: 1.6 }}>
+              <div style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, padding: "14px 16px", fontSize: 13.5, color: T.dim, lineHeight: 1.6 }}>
                 Especially useful: your role, which view would matter most in your organization, and what's missing before you'd trust a tool like this.
               </div>
               <a href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer" style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                background: T.accent, color: "#fff", borderRadius: 9, padding: "12px 16px",
+                background: T.accent, color: "#fff", borderRadius: 14, padding: "12px 16px",
                 fontSize: 15, fontWeight: 700, textDecoration: "none",
               }}>
                 Open feedback form <ExternalLink size={15} />
@@ -723,7 +723,7 @@ export default function ArgusMVP() {
             position: "fixed", bottom: mobile ? 84 : 24, left: "50%", transform: "translateX(-50%)",
             width: mobile ? "calc(100% - 32px)" : "auto", boxSizing: "border-box",
             background: T.panelSoft, border: `1px solid ${T.blueBorder}`, color: T.text,
-            borderRadius: 10, padding: "12px 20px", fontSize: 14, zIndex: 70,
+            borderRadius: 14, padding: "12px 20px", fontSize: 14, zIndex: 70,
             display: "flex", alignItems: "center", gap: 10, boxShadow: T.shadow,
           }}>
             <CheckCircle2 size={16} color={T.isDark ? "#34d399" : "#066a4d"} style={{ flexShrink: 0 }} /> {toast}

@@ -29,7 +29,7 @@ export const MappingPreview = ({ m }) => {
   const T = useT();
   const missing = m.policies.filter(p => p.state !== "active").length;
   return (
-    <div style={{ background: T.blueSoft, border: `1px solid ${T.blueBorder}`, borderRadius: 9, padding: "10px 12px", fontSize: 13, lineHeight: 1.5 }}>
+    <div style={{ background: T.blueSoft, border: `1px solid ${T.blueBorder}`, borderRadius: 14, padding: "10px 12px", fontSize: 13, lineHeight: 1.5 }}>
       In scope for <b>{m.frameworks.length} frameworks</b> and <b>{m.policies.length} policies</b>
       {missing > 0 && <span style={{ color: T.dim }}> ({missing} not yet in place)</span>}. You can review and exclude mappings after registering.
     </div>
@@ -89,7 +89,7 @@ export function RegisterAgentModal({ onClose, onRegister, policies }) {
         </div>
         <MappingPreview m={preview} />
         {f.autonomy === "Full autonomy" && (
-          <div style={{ display: "flex", gap: 10, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 10, padding: "12px 14px" }}>
+          <div style={{ display: "flex", gap: 10, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 14, padding: "12px 14px" }}>
             <AlertCircle size={16} color={T.warnBox.fg} style={{ flexShrink: 0, marginTop: 1 }} />
             <div style={{ fontSize: 13, color: T.warnBox.fg, lineHeight: 1.5 }}>
               Full-autonomy agents start with an elevated risk score and are subject to the "Limit Full-Autonomy Agent Actions" policy: write operations will require supervisor approval.
@@ -98,7 +98,7 @@ export function RegisterAgentModal({ onClose, onRegister, policies }) {
         )}
         <button disabled={!valid} onClick={() => onRegister(f)} style={{
           background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
-          border: "none", borderRadius: 9, padding: "12px 16px", fontSize: 15, fontWeight: 700,
+          border: "none", borderRadius: 14, padding: "12px 16px", fontSize: 15, fontWeight: 700,
           cursor: valid ? "pointer" : "not-allowed", marginTop: 4,
         }}>
           Register agent
@@ -150,7 +150,7 @@ export function DocUpload({ doc, onChange }) {
   return (
     <div>
       {doc ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 12, padding: "9px 12px" }}>
           <FileText size={16} color={T.blue} style={{ flexShrink: 0 }} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</div>
@@ -162,7 +162,7 @@ export function DocUpload({ doc, onChange }) {
         <label style={{
           position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer",
-          border: `1px dashed ${T.blueBorder}`, borderRadius: 8, padding: "12px", color: T.blue, fontSize: 13.5, fontWeight: 600,
+          border: `1px dashed ${T.blueBorder}`, borderRadius: 14, padding: "12px", color: T.blue, fontSize: 13.5, fontWeight: 600,
           background: T.blueSoft,
         }}>
           <Upload size={15} /> {busy ? "Checking and fingerprinting…" : "Upload approved policy (PDF or Word)"}
@@ -171,7 +171,7 @@ export function DocUpload({ doc, onChange }) {
       )}
       {busy && <div role="status" style={{ color: T.dim, fontSize: 12.5, marginTop: 6 }}>Reading the file and computing its SHA-256 fingerprint…</div>}
       {err && (
-        <div role="alert" style={{ color: T.isDark ? "#fb7185" : "#be123c", fontSize: 12.5, marginTop: 6 }}>
+        <div role="alert" style={{ color: T.isDark ? "#ff8e9e" : "#be123c", fontSize: 12.5, marginTop: 6 }}>
           {err} {last && <button onClick={() => ingest(last)} style={{ background: "none", border: "none", color: T.blue, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 12.5 }}>Retry</button>}
         </div>
       )}
@@ -244,7 +244,7 @@ export function CreatePolicyModal({ onClose, onCreate, initialTemplate, policies
               <option key={t.id} value={t.id} disabled={adopted.has(t.id)}>{t.name}{adopted.has(t.id) ? " (already added)" : ""}</option>
             ))}
           </select>
-          <div style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", marginTop: 8 }}>
+          <div style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px", marginTop: 8 }}>
             {tpl ? (
               <>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
@@ -300,7 +300,7 @@ export function CreatePolicyModal({ onClose, onCreate, initialTemplate, policies
           <DocUpload doc={f.doc} onChange={doc => set({ doc })} />
         </div>
 
-        <div style={{ border: `1px solid ${f.approved ? T.blueBorder : T.border}`, borderRadius: 10, padding: "12px 14px", background: f.approved ? T.blueSoft : "transparent" }}>
+        <div style={{ border: `1px solid ${f.approved ? T.blueBorder : T.border}`, borderRadius: 14, padding: "12px 14px", background: f.approved ? T.blueSoft : "transparent" }}>
           <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
             <input type="checkbox" checked={f.approved} onChange={e => set({ approved: e.target.checked })}
               style={{ width: 17, height: 17, marginTop: 1, accentColor: T.blue, flexShrink: 0 }} />
@@ -343,7 +343,7 @@ export function CreatePolicyModal({ onClose, onCreate, initialTemplate, policies
 
         <button disabled={!valid} onClick={() => onCreate(f)} style={{
           background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
-          border: "none", borderRadius: 9, padding: "12px 16px", fontSize: 15, fontWeight: 700,
+          border: "none", borderRadius: 14, padding: "12px 16px", fontSize: 15, fontWeight: 700,
           cursor: valid ? "pointer" : "not-allowed", marginTop: 4,
         }}>
           {f.approved ? "Create approved policy" : "Save as draft"}
@@ -372,7 +372,7 @@ export function ApprovePolicyModal({ policy, onClose, onApprove }) {
         </div>
         <button disabled={!valid} onClick={() => onApprove(policy.id, a)} style={{
           background: valid ? T.accent : "rgba(148,163,184,.25)", color: valid ? "#fff" : T.faint,
-          border: "none", borderRadius: 9, padding: "12px 16px", fontSize: 15, fontWeight: 700, cursor: valid ? "pointer" : "not-allowed",
+          border: "none", borderRadius: 14, padding: "12px 16px", fontSize: 15, fontWeight: 700, cursor: valid ? "pointer" : "not-allowed",
         }}>
           Approve policy
         </button>

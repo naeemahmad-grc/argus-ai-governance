@@ -21,7 +21,7 @@ export function PolicyMeta({ p, onApprove }) {
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: amber, fontWeight: 700 }}>
             <Clock size={13} /> Draft, pending approval
           </span>
-          <button onClick={() => onApprove(p.id)} style={{ fontSize: 12.5, fontWeight: 700, padding: "4px 10px", borderRadius: 7, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>
+          <button onClick={() => onApprove(p.id)} style={{ fontSize: 12.5, fontWeight: 700, padding: "4px 10px", borderRadius: 999, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>
             Approve
           </button>
         </div>
@@ -85,7 +85,7 @@ export function PolicyEngine({ policies, reqMap, toggle, onOpenCreate, onApprove
   return (
     <div>
       <PageHeader title="Policy Engine" subtitle="Define and manage governance rules for AI agent behavior. Framework tags come from the requirement crosswalk.">
-        <button onClick={onOpenCreate} style={{ display: "flex", alignItems: "center", gap: 8, background: T.accent, border: "none", color: "#fff", borderRadius: 8, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={onOpenCreate} style={{ display: "flex", alignItems: "center", gap: 8, background: T.accent, border: "none", color: "#fff", borderRadius: 999, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
           <Plus size={16} /> Create Policy
         </button>
       </PageHeader>

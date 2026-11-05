@@ -35,7 +35,7 @@ export function AuditTrail({ audit, agents, policies, onOpenAgent, onOpenPolicy,
     (!f.q || [e.eid, e.desc, e.type, e.agent, e.actor?.name].join(" ").toLowerCase().includes(f.q.toLowerCase())));
   const filtered = Object.entries(f).some(([k, v]) => v && v !== "all");
   const sel = { ...fieldStyle(T), width: "auto", flex: T.mobile ? "1 1 45%" : "0 1 180px", padding: "8px 10px", fontSize: 13 };
-  const red = T.isDark ? "#fb7185" : "#be123c", green = T.isDark ? "#34d399" : "#066a4d";
+  const red = T.isDark ? "#ff8e9e" : "#be123c", green = T.isDark ? "#34d399" : "#066a4d";
 
   const exportCsv = () => {
     downloadFile("argus-audit-trail.csv", toCSV([
@@ -59,7 +59,7 @@ export function AuditTrail({ audit, agents, policies, onOpenAgent, onOpenPolicy,
   return (
     <div>
       <PageHeader title="Audit Trail" subtitle="Append-only ledger of platform events and governance actions, with who acted, in which role, and what changed.">
-        <button onClick={exportCsv} disabled={!shown.length} style={{ display: "flex", alignItems: "center", gap: 8, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 8, padding: "9px 16px", fontSize: 14, cursor: shown.length ? "pointer" : "not-allowed" }}>
+        <button onClick={exportCsv} disabled={!shown.length} style={{ display: "flex", alignItems: "center", gap: 8, background: T.panel, border: `1px solid ${T.border}`, color: T.blue, borderRadius: 12, padding: "9px 16px", fontSize: 14, cursor: shown.length ? "pointer" : "not-allowed" }}>
           <Download size={15} /> Export {filtered ? "filtered " : ""}CSV
         </button>
       </PageHeader>
@@ -82,7 +82,7 @@ export function AuditTrail({ audit, agents, policies, onOpenAgent, onOpenPolicy,
         {filtered && <button onClick={() => set({ q: "", agent: "all", type: "all", actor: "all", outcome: "all", from: "", to: "", corr: "" })} style={linkBtn(T)}>Clear filters</button>}
       </div>
       {f.agent !== "all" && !all && !mine.has(f.agent) && (
-        <div role="alert" style={{ fontSize: 13, color: T.warnBox.fg, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 8, padding: "9px 12px", marginBottom: 10 }}>
+        <div role="alert" style={{ fontSize: 13, color: T.warnBox.fg, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 12, padding: "9px 12px", marginBottom: 10 }}>
           You're acting as {user.name}, who doesn't have access to {f.agent}'s events. Only its owner, governance roles and internal audit can see them.
         </div>
       )}
@@ -123,7 +123,7 @@ export function AuditTrail({ audit, agents, policies, onOpenAgent, onOpenPolicy,
                       </tr>
                       {isOpen && (
                         <tr><td colSpan={7} style={{ padding: "0 12px 12px 44px" }}>
-                          <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 14px", margin: 0, fontSize: 12.5, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px" }}>
+                          <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 14px", margin: 0, fontSize: 12.5, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px" }}>
                             <dt style={{ color: T.faint }}>Record</dt><dd style={{ margin: 0 }}>{e.entity ? `${e.entity.kind} ${e.entity.id}${e.entity.version !== undefined ? ` (version ${e.entity.version})` : ""}` : "—"}</dd>
                             <dt style={{ color: T.faint }}>Change</dt><dd style={{ margin: 0, fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{e.before || e.after ? `${JSON.stringify(e.before || {})} → ${JSON.stringify(e.after || {})}` : "—"}</dd>
                             <dt style={{ color: T.faint }}>Correlation</dt><dd style={{ margin: 0 }}>{e.correlation || "—"}</dd>

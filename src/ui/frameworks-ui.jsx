@@ -92,7 +92,7 @@ export function RecommendedControl({ tpl, reqKey, gapKeys, policies, onAdopt }) 
   const existing = policies.find(p => p.id === tpl.id);
   const alsoCloses = tpl.closeKeys.filter(k => k !== reqKey && gapKeys.has(k)).map(reqLabel);
   return (
-    <div style={{ marginTop: 10, background: T.panel, border: `1px dashed ${T.blueBorder}`, borderRadius: 9, padding: "12px 13px" }}>
+    <div style={{ marginTop: 10, background: T.panel, border: `1px dashed ${T.blueBorder}`, borderRadius: 14, padding: "12px 13px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, letterSpacing: ".06em", color: T.blue, textTransform: "uppercase" }}>
         <Lightbulb size={13} /> Recommended control
       </div>
@@ -114,7 +114,7 @@ export function RecommendedControl({ tpl, reqKey, gapKeys, policies, onAdopt }) 
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 11 }}>
         <button onClick={() => onAdopt(tpl)} style={{
           display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700,
-          padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: T.accent, color: "#fff", border: "none",
+          padding: "8px 12px", borderRadius: 999, cursor: "pointer", background: T.accent, color: "#fff", border: "none",
         }}>
           {existing
             ? (existing.status === "draft" ? <><BadgeCheck size={14} /> Approve this policy</> : <><Plus size={14} /> {existing.enabled ? "Map this policy" : "Enable and map this policy"}</>)
@@ -155,7 +155,7 @@ export function RecommendationPlan({ gapKeys, policies, onAdopt, totalGaps }) {
           return (
             <div key={t.id} style={{
               display: "flex", flexDirection: T.mobile ? "column" : "row", alignItems: T.mobile ? "stretch" : "center",
-              gap: T.mobile ? 10 : 16, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px",
+              gap: T.mobile ? 10 : 16, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, padding: "12px 14px",
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -171,7 +171,7 @@ export function RecommendationPlan({ gapKeys, policies, onAdopt, totalGaps }) {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                 <a href={t.template} download aria-label={`Download ${t.name} template`} title="Download template (.docx)" style={{
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 10px", borderRadius: 8,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 10px", borderRadius: 12,
                   border: `1px solid ${T.blueBorder}`, color: T.blue, fontSize: 13, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap",
                   flex: T.mobile ? 1 : "none",
                 }}>
@@ -179,7 +179,7 @@ export function RecommendationPlan({ gapKeys, policies, onAdopt, totalGaps }) {
                 </a>
                 <button onClick={() => onAdopt(t)} style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 13, fontWeight: 700,
-                  padding: "8px 12px", borderRadius: 8, cursor: "pointer", background: T.accent, color: "#fff", border: "none", whiteSpace: "nowrap",
+                  padding: "8px 12px", borderRadius: 999, cursor: "pointer", background: T.accent, color: "#fff", border: "none", whiteSpace: "nowrap",
                   flex: T.mobile ? 1 : "none",
                 }}>
                   {existing?.status === "draft" ? <><BadgeCheck size={14} /> Approve</> : <><Plus size={14} /> {existing ? "Enable and map" : "Create"}</>}
@@ -232,7 +232,7 @@ export function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink,
         </div>
 
         {f.note && (
-          <div style={{ display: "flex", gap: 10, background: T.blueSoft, border: `1px solid ${T.blueBorder}`, borderRadius: 10, padding: "12px 14px", marginBottom: 18 }}>
+          <div style={{ display: "flex", gap: 10, background: T.blueSoft, border: `1px solid ${T.blueBorder}`, borderRadius: 14, padding: "12px 14px", marginBottom: 18 }}>
             <Info size={15} color={T.blue} style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ fontSize: 13, lineHeight: 1.55, color: T.text }}>{f.note}</div>
           </div>
@@ -249,7 +249,7 @@ export function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink,
             const disabledOnly = !req.covered && linkedPolicies.length > 0;
             const linkable = policies.filter(p => !req.refs.includes(p.id));
             return (
-              <div key={req.key} style={{ background: T.panelSoft, border: `1px solid ${!gapOpen ? T.border : (T.isDark ? "rgba(245,158,11,.35)" : "rgba(180,83,9,.3)")}`, borderRadius: 10, padding: "12px 14px", borderStyle: na ? "dashed" : "solid" }}>
+              <div key={req.key} style={{ background: T.panelSoft, border: `1px solid ${!gapOpen ? T.border : (T.isDark ? "rgba(245,158,11,.35)" : "rgba(180,83,9,.3)")}`, borderRadius: 14, padding: "12px 14px", borderStyle: na ? "dashed" : "solid" }}>
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                   {!gapOpen
                     ? <CheckCircle2 size={16} color={green} style={{ flexShrink: 0, marginTop: 2 }} />
@@ -289,12 +289,12 @@ export function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink,
                     {gapOpen && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                         {disabledOnly && linkedPolicies.filter(p => p.status === "draft").map(p => (
-                          <button key={`a-${p.id}`} onClick={() => onApprove(p.id)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>
+                          <button key={`a-${p.id}`} onClick={() => onApprove(p.id)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 999, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>
                             <BadgeCheck size={13} /> Approve {p.name}
                           </button>
                         ))}
                         {disabledOnly && linkedPolicies.filter(p => !p.enabled && p.status !== "draft").map(p => (
-                          <button key={p.id} onClick={() => onTogglePolicy(p.id)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>
+                          <button key={p.id} onClick={() => onTogglePolicy(p.id)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 999, cursor: "pointer", background: T.accent, color: "#fff", border: "none" }}>
                             Enable {p.name}
                           </button>
                         ))}
@@ -306,7 +306,7 @@ export function FrameworkDrawer({ framework, policies, gapKeys, onClose, onLink,
                             {linkable.map(p => <option key={p.id} value={p.id}>{p.name}{p.enabled ? "" : " (disabled)"}</option>)}
                           </select>
                         ) : (
-                          <button onClick={() => setLinking(req.key)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, cursor: "pointer", background: "transparent", color: T.blue, border: `1px solid ${T.blueBorder}` }}>
+                          <button onClick={() => setLinking(req.key)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 999, cursor: "pointer", background: "transparent", color: T.blue, border: `1px solid ${T.blueBorder}` }}>
                             <Link2 size={13} /> {recommendationFor(req.key) && !disabledOnly ? "Map an existing policy instead" : "Map a policy"}
                           </button>
                         )}
@@ -352,7 +352,7 @@ export function RegulatorySource({ id }) {
   const row = (k, v) => (<><dt style={{ color: T.faint }}>{k}</dt><dd style={{ margin: 0 }}>{v}</dd></>);
   const pending = r.claims.filter(c => c.verification === "pending").length;
   return (
-    <section aria-label="Source and status" style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 18 }}>
+    <section aria-label="Source and status" style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, padding: "12px 14px", marginBottom: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0 }}>Source and status</h3>
         <ReviewBadge id={id} />
@@ -373,7 +373,7 @@ export function RegulatorySource({ id }) {
       {open && (
         <ul style={{ listStyle: "none", padding: 0, margin: "8px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
           {r.claims.map(c => (
-            <li key={c.id} style={{ fontSize: 12.5, lineHeight: 1.45, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px" }}>
+            <li key={c.id} style={{ fontSize: 12.5, lineHeight: 1.45, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: "7px 9px" }}>
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                 <b>{VERIFICATION[c.verification].label}</b><span style={{ color: T.faint }}>· {c.kind}</span>
               </div>

@@ -27,7 +27,7 @@ export function Dashboard({ agents, assessment, audit, treatments, gates, decisi
   }));
 
   const green = T.isDark ? "#34d399" : "#066a4d";
-  const red = T.isDark ? "#fb7185" : "#be123c";
+  const red = T.isDark ? "#ff8e9e" : "#be123c";
   const amber = T.isDark ? "#f59e0b" : "#92400e";
 
   const [cov, ful] = assessmentTiles(T, assessment);
@@ -51,7 +51,7 @@ export function Dashboard({ agents, assessment, audit, treatments, gates, decisi
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: T.mobile ? 8 : 14, gap: 6 }}>
               <span style={{ color: T.dim, fontSize: T.mobile ? 12.5 : 14 }}>{k.label}</span>{k.icon}
             </div>
-            <div style={{ fontSize: T.mobile ? 24 : 30, fontWeight: 700, color: k.color, marginBottom: 6 }}>{k.value}</div>
+            <div style={{ fontSize: T.mobile ? 26 : 34, fontWeight: 500, letterSpacing: "-0.02em", color: k.color, marginBottom: 6 }}>{k.value}</div>
             <div style={{ color: T.faint, fontSize: T.mobile ? 11.5 : 13, lineHeight: 1.4 }}>{k.sub}</div>
           </Card>
         ))}
@@ -108,7 +108,7 @@ export function Dashboard({ agents, assessment, audit, treatments, gates, decisi
 }
 
 export const coverageColor = (T, pct) =>
-  pct >= 80 ? (T.isDark ? "#34d399" : "#066a4d") : pct >= 60 ? (T.isDark ? "#f59e0b" : "#92400e") : (T.isDark ? "#fb7185" : "#be123c");
+  pct >= 80 ? (T.isDark ? "#34d399" : "#066a4d") : pct >= 60 ? (T.isDark ? "#f59e0b" : "#92400e") : (T.isDark ? "#ff8e9e" : "#be123c");
 
 export function CoverageBar({ label, covered, total, pct, fulfillment }) {
   const T = useT();

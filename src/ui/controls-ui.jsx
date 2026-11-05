@@ -31,7 +31,7 @@ export function TestForm({ policy, agents, onSave, onCancel }) {
   const ok = f.evidence.trim() && f.owner && f.testedOn && f.testedOn <= localISO();
   const id = `test-${policy.id}`;
   return (
-    <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 9 }}>
+    <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 14, padding: 12, display: "flex", flexDirection: "column", gap: 9 }}>
       <div style={{ fontSize: 13, fontWeight: 700 }}>Record a test of version {policy.version || 1}</div>
       <fieldset style={{ border: "none", padding: 0, margin: 0, display: "flex", gap: 14 }}>
         <legend style={{ ...labelStyle(T), marginBottom: 4 }}>Result</legend>
@@ -111,7 +111,7 @@ export function ControlEvidence({ p, agents, onTest, onRevise }) {
       {!perm.ok && <NotAllowed action="policy.manage" compact />}
       {mode === "test" && <TestForm policy={p} agents={users} onCancel={() => setMode(null)} onSave={t => { onTest(p.id, t); setMode(null); }} />}
       {mode === "revise" && (
-        <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 14, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>Publish version {(p.version || 1) + 1}</div>
           <div style={{ fontSize: 12.5, color: T.dim, lineHeight: 1.45 }}>A new version goes back to draft until someone other than you approves it, and test results on version {p.version || 1} become stale. Assessments that relied on them drop until it is re-tested.</div>
           <label htmlFor={`rev-${p.id}`} style={labelStyle(T)}>What changed (required)</label>
@@ -125,8 +125,8 @@ export function ControlEvidence({ p, agents, onTest, onRevise }) {
       {hist && (
         <ol style={{ listStyle: "none", padding: 0, margin: "8px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
           {tests.map(t => (
-            <li key={t.id} style={{ fontSize: 12, lineHeight: 1.45, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 7, padding: "7px 9px" }}>
-              <b style={{ color: t.result === "pass" ? green : (T.isDark ? "#fb7185" : "#be123c") }}>{t.result === "pass" ? "Passed" : "Failed"}</b> {t.testedOn} on v{t.version || 1}
+            <li key={t.id} style={{ fontSize: 12, lineHeight: 1.45, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "7px 9px" }}>
+              <b style={{ color: t.result === "pass" ? green : (T.isDark ? "#ff8e9e" : "#be123c") }}>{t.result === "pass" ? "Passed" : "Failed"}</b> {t.testedOn} on v{t.version || 1}
               {t.scope !== "all" && <> · {agents.filter(a => t.scope.includes(a.id)).map(a => a.name).join(", ")} only</>}
               <div style={{ color: T.dim }}>{t.evidence}</div>
               <div style={{ color: T.faint }}>Owner {t.owner} · recorded by {t.by} · valid until {t.expiresOn}{t.synthetic ? " · synthetic" : ""}</div>
@@ -155,7 +155,7 @@ export const controlStatus = (id, policies, audit = [], agentName) => {
 
 export function ControlPill({ c }) {
   const T = useT();
-  const red = T.isDark ? "#fb7185" : "#be123c";
+  const red = T.isDark ? "#ff8e9e" : "#be123c";
   const amber = T.isDark ? "#f59e0b" : "#92400e";
   const st = c.state === "active" ? { fg: T.blue, bg: T.blueSoft, border: T.blueBorder }
     : c.state === "violated" || c.state === "failed" ? { fg: red, bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.4)" : "rgba(225,29,72,.3)" }
@@ -166,7 +166,7 @@ export function ControlPill({ c }) {
 // The one action that moves a control toward "in place"
 export function ControlAction({ c, actions, small = true }) {
   const T = useT();
-  const btn = { display: "inline-flex", alignItems: "center", gap: 5, fontSize: small ? 12 : 13, fontWeight: 700, padding: small ? "4px 9px" : "6px 11px", borderRadius: 6, border: "none", background: T.accent, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" };
+  const btn = { display: "inline-flex", alignItems: "center", gap: 5, fontSize: small ? 12 : 13, fontWeight: 700, padding: small ? "4px 9px" : "6px 11px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" };
   if (c.state === "missing" && c.template) return <button style={btn} onClick={() => actions.createPolicy(c.template.id)}><Plus size={12} /> Create from template</button>;
   if (c.state === "draft") return <button style={btn} onClick={() => actions.approve(c.id)}><BadgeCheck size={12} /> Approve</button>;
   if (c.state === "disabled") return <button style={btn} onClick={() => actions.togglePolicy(c.id)}>Enable policy</button>;
@@ -179,7 +179,7 @@ export function RiskScore({ s, label, big }) {
   const lv = riskLevel(s.score), st = T.risk[lv];
   return (
     <span title={`Likelihood ${s.l} (${LIKELIHOOD[s.l - 1]}) × impact ${s.i} (${IMPACT[s.i - 1]}) = ${s.score}`}
-      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: big ? "5px 10px" : "2px 8px", borderRadius: 6, background: st.bg, border: `1px solid ${st.border}`, color: st.fg, fontSize: big ? 13 : 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: big ? "5px 10px" : "2px 8px", borderRadius: 8, background: st.bg, border: `1px solid ${st.border}`, color: st.fg, fontSize: big ? 13 : 12, fontWeight: 700, whiteSpace: "nowrap" }}>
       {label && <span style={{ fontWeight: 600 }}>{label}</span>}{s.score} {lv[0] + lv.slice(1).toLowerCase()}
     </span>
   );
@@ -188,7 +188,7 @@ export function RiskScore({ s, label, big }) {
 export const GAP_STYLE = T => ({
   "Met": { fg: T.isDark ? "#34d399" : "#066a4d", bg: T.isDark ? "rgba(52,211,153,.1)" : "rgba(5,150,105,.08)", border: T.isDark ? "rgba(52,211,153,.35)" : "rgba(5,150,105,.3)" },
   "Partially met": { fg: T.isDark ? "#f59e0b" : "#92400e", bg: T.isDark ? "rgba(245,158,11,.1)" : "rgba(180,83,9,.07)", border: T.isDark ? "rgba(245,158,11,.35)" : "rgba(180,83,9,.3)" },
-  "Not met": { fg: T.isDark ? "#fb7185" : "#be123c", bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.35)" : "rgba(225,29,72,.3)" },
+  "Not met": { fg: T.isDark ? "#ff8e9e" : "#be123c", bg: T.isDark ? "rgba(244,63,94,.1)" : "rgba(225,29,72,.07)", border: T.isDark ? "rgba(244,63,94,.35)" : "rgba(225,29,72,.3)" },
   "Not applicable": { fg: T.faint, bg: T.panelSoft, border: T.border },
 });
 export const GapPill = ({ status }) => { const T = useT(); const s = GAP_STYLE(T)[status]; return <Pill small fg={s.fg} bg={s.bg} border={s.border}>{status}</Pill>; };
@@ -204,7 +204,7 @@ export const addDays = n => addDaysISO(n);
 export const SegTabs = ({ tabs, value, onChange }) => {
   const T = useT();
   return (
-    <div role="tablist" style={{ display: "flex", background: T.panel, border: `1px solid ${T.border}`, borderRadius: 9, padding: 3, gap: 3, width: "fit-content", maxWidth: "100%", overflowX: "auto" }}>
+    <div role="tablist" style={{ display: "flex", background: T.panel, border: `1px solid ${T.border}`, borderRadius: 14, padding: 3, gap: 3, width: "fit-content", maxWidth: "100%", overflowX: "auto" }}>
       {tabs.map(([id, label, icon]) => (
         <button key={id} role="tab" aria-selected={value === id} tabIndex={value === id ? 0 : -1} onClick={() => onChange(id)}
           onKeyDown={e => {
@@ -216,7 +216,7 @@ export const SegTabs = ({ tabs, value, onChange }) => {
             onChange(tabs[next][0]);
             setTimeout(() => list?.children[next]?.focus(), 0);
           }} style={{
-          display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 13.5, fontWeight: 600,
+          display: "flex", alignItems: "center", gap: 6, border: "none", borderRadius: 999, padding: "7px 14px", fontSize: 13.5, fontWeight: 600,
           cursor: "pointer", whiteSpace: "nowrap", background: value === id ? T.accent : "transparent", color: value === id ? "#fff" : T.dim,
         }}>{icon}{label}</button>
       ))}

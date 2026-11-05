@@ -52,7 +52,7 @@ export function MethodNote({ a, style }) {
         {open ? "Hide method" : "How these are calculated"}
       </button>
       {open && (
-        <div style={{ marginTop: 8, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 13px", color: T.dim, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ marginTop: 8, background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, padding: "10px 13px", color: T.dim, display: "flex", flexDirection: "column", gap: 6 }}>
           <div><b style={{ color: T.text }}>Mapped control coverage: </b>{COVERAGE_METHOD}</div>
           <div><b style={{ color: T.text }}>Requirement fulfillment: </b>{FULFILLMENT_METHOD}</div>
           <div><b style={{ color: T.text }}>Exclusions: </b>{EXCLUSION_METHOD}
@@ -81,7 +81,7 @@ export function RecentAlerts({ audit, agents, openAgent }) {
   const T = useT();
   const byName = Object.fromEntries(agents.map(a => [a.name, a]));
   const events = [...audit].filter(e => e.sev === "critical" || e.sev === "warn").sort((x, y) => y.at - x.at).slice(0, 6);
-  const green = T.isDark ? "#34d399" : "#066a4d", red = T.isDark ? "#fb7185" : "#be123c";
+  const green = T.isDark ? "#34d399" : "#066a4d", red = T.isDark ? "#ff8e9e" : "#be123c";
   const stateOf = e => {
     const a = byName[e.agent];
     if (!a) return null;
@@ -99,7 +99,7 @@ export function RecentAlerts({ audit, agents, openAgent }) {
           const st = stateOf(e);
           return (
             <button key={i} onClick={() => openAgent(e.agent)} style={{
-              background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, textAlign: "left", color: T.text, font: "inherit",
+              background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, textAlign: "left", color: T.text, font: "inherit",
               padding: "12px 14px", display: "flex", gap: 10, cursor: "pointer", width: "100%",
             }}>
               <div style={{ marginTop: 3 }}><SevDot sev={e.sev} size={13} /></div>
@@ -134,7 +134,7 @@ export function DecisionForm({ agent, kind, blockers, life, onCancel }) {
   const ok = byOk && reason.trim() && (kind === "suspend" || (until && until <= maxUntil && until > localISO()));
   const id = `${kind}-${agent.id}`;
   return (
-    <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 9 }}>
+    <div style={{ marginTop: 10, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 14, padding: 12, display: "flex", flexDirection: "column", gap: 9 }}>
       <div style={{ fontSize: 13, fontWeight: 700 }}>{kind === "exception" ? "Approve a time-limited exception" : "Suspend this agent"}</div>
       <div>
         <label htmlFor={`${id}-by`} style={labelStyle(T)}>Decide as (your role; not the owner, {agent.owner})</label>
@@ -185,7 +185,7 @@ export function GateCard({ agent, policies, audit, actions, life, ctx }) {
     return null;
   };
   return (
-    <div id="gate-card" style={{ border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 10, padding: 14, marginBottom: 18 }}>
+    <div id="gate-card" style={{ border: `1px solid ${tone.border}`, background: tone.bg, borderRadius: 14, padding: 14, marginBottom: 18 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <AlertTriangle size={17} color={tone.fg} />
         <div style={{ fontSize: 15.5, fontWeight: 800, color: tone.fg }}>{op.state === "conflict" ? "Gate conflict" : "Operating under an exception"}</div>
@@ -287,7 +287,7 @@ export function Decisions({ items, gates, onGates, onAction }) {
   const meta = (k, v, warn) => (
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11, color: T.faint, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>{k}</div>
-      <div style={{ fontSize: 13, marginTop: 2, color: warn ? (T.isDark ? "#fb7185" : "#be123c") : T.text, fontWeight: warn ? 700 : 400 }}>{v}</div>
+      <div style={{ fontSize: 13, marginTop: 2, color: warn ? (T.isDark ? "#ff8e9e" : "#be123c") : T.text, fontWeight: warn ? 700 : 400 }}>{v}</div>
     </div>
   );
   return (

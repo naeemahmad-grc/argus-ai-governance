@@ -18,7 +18,7 @@ export function NotAllowed({ action, ctx, why, compact }) {
   if (r.ok) return null;
   const alt = suggestUser(action, ctx);
   return (
-    <div role="note" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 12.5, lineHeight: 1.45, marginTop: compact ? 6 : 10, background: T.panelSoft, border: `1px dashed ${T.border}`, borderRadius: 8, padding: "8px 11px", color: T.dim }}>
+    <div role="note" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 12.5, lineHeight: 1.45, marginTop: compact ? 6 : 10, background: T.panelSoft, border: `1px dashed ${T.border}`, borderRadius: 12, padding: "8px 11px", color: T.dim }}>
       <UserCheck size={14} color={T.faint} style={{ flexShrink: 0 }} />
       <span style={{ flex: "1 1 220px" }}>Acting as <b style={{ color: T.text }}>{user.name}</b>. {why ? `${why} ` : ""}{r.reason}</span>
       {alt && <button onClick={() => actAs(alt.id)} style={{ background: "none", border: "none", color: T.blue, fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>Act as {alt.name}</button>}

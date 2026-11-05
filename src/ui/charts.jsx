@@ -122,9 +122,9 @@ export function RiskRadar({ agents, openAgent }) {
           return (
             <g key={v}>
               <circle cx={CX} cy={CY} r={rr} fill="none"
-                stroke={crit ? (T.isDark ? "#fb7185" : "#be123c") : T.grid}
+                stroke={crit ? (T.isDark ? "#ff8e9e" : "#be123c") : T.grid}
                 strokeWidth={crit ? 1.4 : 1} strokeDasharray={crit ? "5 5" : "none"} opacity={crit ? 0.55 : 1} />
-              <text x={CX + 6} y={CY - rr - 5} fontSize={10 * fs} fill={crit ? (T.isDark ? "#fb7185" : "#be123c") : T.faint}>
+              <text x={CX + 6} y={CY - rr - 5} fontSize={10 * fs} fill={crit ? (T.isDark ? "#ff8e9e" : "#be123c") : T.faint}>
                 {crit ? "critical threshold" : v}
               </text>
             </g>
@@ -206,10 +206,10 @@ export function Heatmap({ agents, openAgent }) {
               : "Visual distribution of agents by aggregated risk score."}
           </div>
         </div>
-        <div style={{ display: "flex", background: T.panel, border: `1px solid ${T.border}`, borderRadius: 9, padding: 3, gap: 3 }}>
+        <div style={{ display: "flex", background: T.panel, border: `1px solid ${T.border}`, borderRadius: 14, padding: 3, gap: 3 }}>
           {[["radar", "Radar"], ["grid", "Grid"], ["table", "Table"]].map(([id, label]) => (
             <button key={id} aria-pressed={mode === id} onClick={() => setMode(id)} style={{
-              border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13.5, fontWeight: 600,
+              border: "none", borderRadius: 999, padding: "7px 16px", fontSize: 13.5, fontWeight: 600,
               cursor: "pointer", background: mode === id ? T.accent : "transparent",
               color: mode === id ? "#fff" : T.dim, transition: "all .12s",
             }}>{label}</button>
@@ -229,7 +229,7 @@ export function Heatmap({ agents, openAgent }) {
               {sorted.map(a => (
                 <button key={a.id} onClick={() => openAgent(a.name)} style={{
                   display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
-                  background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 9,
+                  background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14,
                   padding: "10px 12px", color: T.text, fontSize: 14, cursor: "pointer", textAlign: "left",
                 }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>

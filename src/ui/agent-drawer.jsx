@@ -32,7 +32,7 @@ export function MappingRow({ item, kind, onExclude, onInclude, action }) {
   const ex = item.excluded;
 
   return (
-    <div style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 12px", opacity: ex ? 0.72 : 1 }}>
+    <div style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, padding: "10px 12px", opacity: ex ? 0.72 : 1 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 9 }}>
         {ex ? <X size={15} color={T.faint} style={{ flexShrink: 0, marginTop: 2 }} />
           : st ? (st.tone === "green" ? <CheckCircle2 size={15} color={green} style={{ flexShrink: 0, marginTop: 2 }} /> : <AlertCircle size={15} color={amber} style={{ flexShrink: 0, marginTop: 2 }} />)
@@ -62,11 +62,11 @@ export function MappingRow({ item, kind, onExclude, onInclude, action }) {
                 style={{ ...fieldStyle(T), background: T.panel, padding: "8px 10px", fontSize: 13 }} />
               <div style={{ display: "flex", gap: 8 }}>
                 <button disabled={!reason.trim()} onClick={() => { onExclude(item.key, reason.trim()); setExcluding(false); setReason(""); }} style={{
-                  fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 7, border: "none",
+                  fontSize: 12.5, fontWeight: 700, padding: "6px 11px", borderRadius: 10, border: "none",
                   background: reason.trim() ? T.accent : "rgba(148,163,184,.25)", color: reason.trim() ? "#fff" : T.faint,
                   cursor: reason.trim() ? "pointer" : "not-allowed",
                 }}>Exclude</button>
-                <button onClick={() => { setExcluding(false); setReason(""); }} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 11px", borderRadius: 7, border: `1px solid ${T.border}`, background: "transparent", color: T.dim, cursor: "pointer" }}>Cancel</button>
+                <button onClick={() => { setExcluding(false); setReason(""); }} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 11px", borderRadius: 999, border: `1px solid ${T.border}`, background: "transparent", color: T.dim, cursor: "pointer" }}>Cancel</button>
               </div>
             </div>
           )}
@@ -106,15 +106,15 @@ export function AgentDrawer({ agent, audit, policies, actions, treatments, gates
 
   const policyAction = p => {
     if (p.state === "missing" && p.template) return (
-      <button onClick={() => actions.createPolicy(p.template.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 6, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>
+      <button onClick={() => actions.createPolicy(p.template.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>
         <Plus size={12} /> Create from template
       </button>);
     if (p.state === "draft") return (
-      <button onClick={() => actions.approve(p.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 6, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>
+      <button onClick={() => actions.approve(p.id)} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>
         <BadgeCheck size={12} /> Approve
       </button>);
     if (p.state === "disabled") return (
-      <button onClick={() => actions.togglePolicy(p.id)} style={{ fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 6, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>
+      <button onClick={() => actions.togglePolicy(p.id)} style={{ fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>
         Enable policy
       </button>);
     return null;
@@ -162,7 +162,7 @@ export function AgentDrawer({ agent, audit, policies, actions, treatments, gates
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
           {[["Department", agent.dept], ["Owner", agent.owner], ["Autonomy", agent.autonomy], ["Risk score", `${agent.score} / 100`]].map(([k, v]) => (
-            <div key={k} style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
+            <div key={k} style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, padding: "12px 14px" }}>
               <div style={{ color: T.faint, fontSize: 12, marginBottom: 4 }}>{k}</div>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{v}</div>
             </div>
@@ -174,8 +174,8 @@ export function AgentDrawer({ agent, audit, policies, actions, treatments, gates
             <>
               <TraitPicker traits={draftTraits} onChange={setDraftTraits} />
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button onClick={() => { onUpdateTraits(agent.id, draftTraits); setEditing(false); }} style={{ fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>Save and remap</button>
-                <button onClick={() => setEditing(false)} style={{ fontSize: 13, fontWeight: 600, padding: "7px 12px", borderRadius: 8, border: `1px solid ${T.border}`, background: "transparent", color: T.dim, cursor: "pointer" }}>Cancel</button>
+                <button onClick={() => { onUpdateTraits(agent.id, draftTraits); setEditing(false); }} style={{ fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 999, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>Save and remap</button>
+                <button onClick={() => setEditing(false)} style={{ fontSize: 13, fontWeight: 600, padding: "7px 12px", borderRadius: 999, border: `1px solid ${T.border}`, background: "transparent", color: T.dim, cursor: "pointer" }}>Cancel</button>
               </div>
             </>
           ) : (
@@ -212,7 +212,7 @@ export function AgentDrawer({ agent, audit, policies, actions, treatments, gates
         {events.length === 0 && <div style={{ color: T.faint, fontSize: 13.5 }}>No recorded events for this agent.</div>}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {events.map((e, i) => (
-            <div key={i} style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px", display: "flex", gap: 10 }}>
+            <div key={i} style={{ background: T.panelSoft, border: `1px solid ${T.border}`, borderRadius: 14, padding: "12px 14px", display: "flex", gap: 10 }}>
               <div style={{ marginTop: 2 }}><SevDot sev={e.sev} size={14} /></div>
               <div>
                 <div style={{ fontSize: 13.5, lineHeight: 1.45 }}>{e.desc}</div>

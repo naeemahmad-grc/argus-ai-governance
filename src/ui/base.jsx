@@ -7,27 +7,29 @@ import { X, Info, AlertOctagon, AlertCircle } from "lucide-react";
 export const THEMES = {
   dark: {
     isDark: true,
-    bg: "#0a0f1e", sidebar: "#0b1120", panel: "#0e1526", panelSoft: "#111a30",
-    border: "rgba(148,163,184,.12)", text: "#e2e8f0", dim: "#94a3b8",
-    faint: "#8a96aa", blue: "#4a9eea", accent: "#2a6cc8", blueSoft: "rgba(74,158,234,.1)",
-    blueBorder: "rgba(74,158,234,.3)", avatarBg: "#1e3a5f",
-    overlay: "rgba(2,6,16,.65)", shadow: "0 8px 30px rgba(0,0,0,.4)",
-    grid: "rgba(148,163,184,.12)", barCursor: "rgba(148,163,184,.06)",
-    navText: "#94a3b8",
+    // Pulse soft cards, dark: navy page (#0B1F3B), lighter navy cards, periwinkle accent
+    bg: "#0B1F3B", sidebar: "#0B1F3B", panel: "#13294a", panelSoft: "#1a3358",
+    border: "#25416b", text: "#eef3fb", dim: "#b0bfd8",
+    faint: "#9cadca", blue: "#a9c0f2", accent: "#4a63b5", blueSoft: "rgba(143,166,230,.12)",
+    blueBorder: "rgba(143,166,230,.35)", avatarBg: "#25416b",
+    overlay: "rgba(3,10,22,.65)", shadow: "0 10px 30px rgba(3,10,22,.5)",
+    cardShadow: "0 1px 2px rgba(0,0,0,.18), 0 10px 30px rgba(3,10,22,.3)",
+    grid: "rgba(176,191,216,.14)", barCursor: "rgba(176,191,216,.06)",
+    navText: "#b0bfd8",
     risk: {
       LOW: { bg: "rgba(52,211,153,.12)", fg: "#34d399", border: "rgba(52,211,153,.35)" },
       MEDIUM: { bg: "rgba(234,179,8,.12)", fg: "#eab308", border: "rgba(234,179,8,.38)" },
       HIGH: { bg: "rgba(249,115,22,.14)", fg: "#fb923c", border: "rgba(249,115,22,.42)" },
-      CRITICAL: { bg: "rgba(244,63,94,.14)", fg: "#fb7185", border: "rgba(244,63,94,.45)" },
+      CRITICAL: { bg: "rgba(244,63,94,.14)", fg: "#ff8e9e", border: "rgba(244,63,94,.45)" },
     },
     status: {
       active: { fg: "#34d399", bg: "rgba(52,211,153,.1)", border: "rgba(52,211,153,.3)" },
-      suspended: { fg: "#fb7185", bg: "rgba(244,63,94,.1)", border: "rgba(244,63,94,.35)" },
+      suspended: { fg: "#ff8e9e", bg: "rgba(244,63,94,.1)", border: "rgba(244,63,94,.35)" },
       pending: { fg: "#94a3b8", bg: "rgba(148,163,184,.1)", border: "rgba(148,163,184,.3)" },
     },
     action: {
-      BLOCK: { fg: "#fb7185", bg: "rgba(244,63,94,.1)" },
-      "REQUIRE APPROVAL": { fg: "#60a5fa", bg: "rgba(96,165,250,.1)" },
+      BLOCK: { fg: "#ff8e9e", bg: "rgba(244,63,94,.1)" },
+      "REQUIRE APPROVAL": { fg: "#8cbcfb", bg: "rgba(96,165,250,.1)" },
       AUDIT: { fg: "#94a3b8", bg: "rgba(148,163,184,.1)" },
       WARN: { fg: "#f59e0b", bg: "rgba(245,158,11,.12)" },
     },
@@ -41,13 +43,15 @@ export const THEMES = {
   },
   light: {
     isDark: false,
-    bg: "#f3f5fa", sidebar: "#ffffff", panel: "#ffffff", panelSoft: "#f1f4f9",
-    border: "rgba(15,23,42,.10)", text: "#0f172a", dim: "#475569",
-    faint: "#556274", blue: "#1d5fb0", accent: "#1d5fb0", blueSoft: "rgba(47,127,209,.09)",
-    blueBorder: "rgba(47,127,209,.35)", avatarBg: "#dbeafe",
-    overlay: "rgba(15,23,42,.4)", shadow: "0 8px 30px rgba(15,23,42,.15)",
-    grid: "rgba(15,23,42,.08)", barCursor: "rgba(15,23,42,.04)",
-    navText: "#475569",
+    // Pulse soft cards, light: cool grey-blue page, near-white floating cards, slate-navy accent
+    bg: "#e9eef6", sidebar: "#e9eef6", panel: "#f8fafd", panelSoft: "#eef2f8",
+    border: "#dde3ed", text: "#1b2233", dim: "#4f586b",
+    faint: "#5a6376", blue: "#3a4a85", accent: "#3d4b7c", blueSoft: "rgba(61,75,124,.08)",
+    blueBorder: "rgba(61,75,124,.3)", avatarBg: "#e1e6f1",
+    overlay: "rgba(15,23,42,.4)", shadow: "0 10px 30px rgba(40,52,90,.14)",
+    cardShadow: "0 1px 2px rgba(16,24,40,.04), 0 10px 30px rgba(40,52,90,.07)",
+    grid: "rgba(27,34,51,.08)", barCursor: "rgba(27,34,51,.04)",
+    navText: "#4f586b",
     risk: {
       LOW: { bg: "rgba(5,150,105,.10)", fg: "#066a4d", border: "rgba(5,150,105,.3)" },
       MEDIUM: { bg: "rgba(161,98,7,.10)", fg: "#854d0e", border: "rgba(161,98,7,.32)" },
@@ -107,7 +111,7 @@ export const PageHeader = ({ title, subtitle, children }) => {
 
 export const fieldStyle = T => ({
   width: "100%", boxSizing: "border-box", background: T.panelSoft,
-  border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px",
+  border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 12px",
   color: T.text, fontSize: 14, outline: "none",
 });
 export const labelStyle = T => ({ color: T.dim, fontSize: 12.5, fontWeight: 600, marginBottom: 6, display: "block" });
@@ -129,7 +133,7 @@ export const PanoptesMark = ({ size = 26, color }) => (
 export const Pill = ({ children, fg, bg, border, small }) => (
   <span style={{
     fontSize: small ? 11 : 12, fontWeight: 600, padding: small ? "2px 8px" : "3px 10px",
-    borderRadius: 6, color: fg, background: bg, border: `1px solid ${border || "transparent"}`,
+    borderRadius: 8, color: fg, background: bg, border: `1px solid ${border || "transparent"}`,
     whiteSpace: "nowrap", letterSpacing: ".02em",
   }}>{children}</span>
 );
@@ -137,7 +141,7 @@ export const Pill = ({ children, fg, bg, border, small }) => (
 export const SevDot = ({ sev, size = 16 }) => {
   const T = useT();
   const map = {
-    critical: <AlertOctagon size={size} color={T.isDark ? "#fb7185" : "#be123c"} />,
+    critical: <AlertOctagon size={size} color={T.isDark ? "#ff8e9e" : "#be123c"} />,
     warn: <AlertCircle size={size} color={T.isDark ? "#f59e0b" : "#92400e"} />,
     info: <Info size={size} color={T.isDark ? "#60a5fa" : "#1d4ed8"} />,
   };
@@ -155,7 +159,7 @@ export const Card = ({ children, style, onClick, id, label, pressed, tabIndex })
         onKeyDown: e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onClick(e); } },
       } : { tabIndex })}
       className={interactive ? "argus-focusable" : undefined}
-      style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 12, ...style }}>{children}</div>
+      style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 20, boxShadow: T.cardShadow, ...style }}>{children}</div>
   );
 };
 
@@ -164,12 +168,12 @@ export function NotFound({ what, hint, onBack, backLabel = "Go back", page }) {
   const T = useT();
   const H = page ? "h1" : "h2";
   return (
-    <div role="alert" style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 12, padding: "22px 24px", margin: "16px 0" }}>
+    <div role="alert" style={{ background: T.panel, border: `1px solid ${T.border}`, borderRadius: 20, boxShadow: T.cardShadow, padding: "22px 24px", margin: "16px 0" }}>
       <H style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>Not found: {what}</H>
       <div style={{ color: T.dim, fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
         {hint || "The link may be mistyped, or it points at something that was removed."} Demo data also resets on refresh, so things created in an earlier session won't be here.
       </div>
-      {onBack && <button onClick={onBack} style={{ marginTop: 12, background: T.accent, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>{backLabel}</button>}
+      {onBack && <button onClick={onBack} style={{ marginTop: 12, background: T.accent, color: "#fff", border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>{backLabel}</button>}
     </div>
   );
 }
@@ -200,7 +204,7 @@ export const Modal = ({ title, subtitle, onClose, children }) => {
     }}>
       <div ref={ref} {...dialogProps(title)} onClick={e => e.stopPropagation()} style={{
         width: "min(520px, 100%)", maxHeight: "90vh", overflowY: "auto",
-        background: T.panel, border: `1px solid ${T.border}`, borderRadius: 14, padding: 26,
+        background: T.panel, border: `1px solid ${T.border}`, borderRadius: 20, padding: 26,
         boxSizing: "border-box", boxShadow: T.shadow,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -299,10 +303,10 @@ export function SortableTable({ caption, columns, rows, initial }) {
 export function ViewSwitch({ value, onChange, label = "Display as" }) {
   const T = useT();
   return (
-    <div role="group" aria-label={label} style={{ display: "inline-flex", background: T.panel, border: `1px solid ${T.border}`, borderRadius: 9, padding: 3, gap: 3 }}>
+    <div role="group" aria-label={label} style={{ display: "inline-flex", background: T.panel, border: `1px solid ${T.border}`, borderRadius: 14, padding: 3, gap: 3 }}>
       {[["chart", "Chart"], ["table", "Table"]].map(([id, l]) => (
         <button key={id} aria-pressed={value === id} onClick={() => onChange(id)} style={{
-          border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+          border: "none", borderRadius: 999, padding: "5px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
           background: value === id ? T.accent : "transparent", color: value === id ? "#fff" : T.dim,
         }}>{l}</button>
       ))}

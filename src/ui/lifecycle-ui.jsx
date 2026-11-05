@@ -10,7 +10,7 @@ import { ControlAction, ControlPill, RiskScore, addDays, controlStatus } from ".
 /* ---------------- agent lifecycle (activation & reinstatement) ---------------- */
 
 export const btnStyle = (T, primary = true, enabled = true) => ({
-  display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 8, whiteSpace: "nowrap",
+  display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, padding: "7px 12px", borderRadius: 12, whiteSpace: "nowrap",
   border: primary ? "none" : `1px solid ${T.border}`, cursor: enabled ? "pointer" : "not-allowed",
   background: !enabled ? "rgba(148,163,184,.25)" : primary ? T.accent : "transparent", color: !enabled ? T.faint : primary ? "#fff" : T.dim,
 });
@@ -33,7 +33,7 @@ export function InlineForm({ fields, submitLabel, onSubmit }) {
 export function RequirementSubs({ item, agent, policies, audit, actions, life }) {
   const T = useT();
   const green = T.isDark ? "#34d399" : "#066a4d";
-  const box = { background: T.panel, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px" };
+  const box = { background: T.panel, border: `1px solid ${T.border}`, borderRadius: 12, padding: "9px 11px" };
   if (item.id === "controls") return item.subs.map(p => {
     const c = controlStatus(p.id, policies, audit, agent.name);
     return <div key={p.id} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}><ControlPill c={c} /><ControlAction c={c} actions={actions} /></div>;
@@ -154,7 +154,7 @@ export function ApprovalPanel({ agent, req, life }) {
   const dueOk = due && due <= maxDue && due > addDays(0);
   const changed = (agent.rev || 0) !== rev;
   return (
-    <div style={{ marginTop: 12, background: T.panel, border: `1px solid ${T.blueBorder}`, borderRadius: 10, padding: 13 }}>
+    <div style={{ marginTop: 12, background: T.panel, border: `1px solid ${T.blueBorder}`, borderRadius: 14, padding: 13 }}>
       <div style={{ fontSize: 13.5, fontWeight: 700 }}>Approver decision</div>
       <div style={{ fontSize: 12.5, color: T.dim, marginTop: 2, lineHeight: 1.45 }}>
         Must be someone other than the owner ({agent.owner}).
@@ -170,7 +170,7 @@ export function ApprovalPanel({ agent, req, life }) {
         <NotAllowed action="agent.approve" ctx={{ agent, requester: agent.review?.byUser }} compact />
       </div>
       {changed && (
-        <div role="alert" style={{ marginTop: 10, fontSize: 12.5, color: T.warnBox.fg, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 8, padding: "8px 11px" }}>
+        <div role="alert" style={{ marginTop: 10, fontSize: 12.5, color: T.warnBox.fg, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 12, padding: "8px 11px" }}>
           {agent.name} changed after you opened this decision. Check the requirements again.{" "}
           <button onClick={() => setRev(agent.rev || 0)} style={{ background: "none", border: "none", color: T.blue, fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 12.5 }}>I've reviewed the latest</button>
         </div>
@@ -204,7 +204,7 @@ export function ApprovalPanel({ agent, req, life }) {
 
 export function LifecycleCard({ agent, policies, audit, treatments, gates, actions, life, onShowTab }) {
   const T = useT();
-  const red = T.isDark ? "#fb7185" : "#be123c";
+  const red = T.isDark ? "#ff8e9e" : "#be123c";
   const green = T.isDark ? "#34d399" : "#066a4d";
   const ctx = { audit, treatments, gates };
 
@@ -212,7 +212,7 @@ export function LifecycleCard({ agent, policies, audit, treatments, gates, actio
     if (!agent.conditions && !agent.probation) return null;
     const act = agent.conditions ? requirements(agent, "activation", ctx) : null;
     return (
-      <div id="lifecycle-card" style={{ border: `1px solid ${T.blueBorder}`, background: T.blueSoft, borderRadius: 10, padding: 14, marginBottom: 18 }}>
+      <div id="lifecycle-card" style={{ border: `1px solid ${T.blueBorder}`, background: T.blueSoft, borderRadius: 14, padding: 14, marginBottom: 18 }}>
         {agent.probation && (
           <div style={{ fontSize: 13, lineHeight: 1.5 }}>
             <b>On probation until {agent.probation.until}.</b> Reinstated by {agent.probation.by} on {agent.probation.on}. A single critical violation suspends the agent again.
@@ -240,7 +240,7 @@ export function LifecycleCard({ agent, policies, audit, treatments, gates, actio
   const activation = req.kind === "activation";
   const pct = Math.round((req.met / req.total) * 100);
   return (
-    <div id="lifecycle-card" style={{ border: `1px solid ${activation ? T.blueBorder : (T.isDark ? "rgba(244,63,94,.45)" : "rgba(225,29,72,.35)")}`, borderRadius: 10, padding: 14, marginBottom: 18, background: activation ? T.blueSoft : (T.isDark ? "rgba(244,63,94,.06)" : "rgba(225,29,72,.04)") }}>
+    <div id="lifecycle-card" style={{ border: `1px solid ${activation ? T.blueBorder : (T.isDark ? "rgba(244,63,94,.45)" : "rgba(225,29,72,.35)")}`, borderRadius: 14, padding: 14, marginBottom: 18, background: activation ? T.blueSoft : (T.isDark ? "rgba(244,63,94,.06)" : "rgba(225,29,72,.04)") }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {activation ? <Clock size={17} color={T.blue} /> : <ShieldAlert size={17} color={red} />}
         <div style={{ fontSize: 15.5, fontWeight: 800, color: activation ? T.text : red }}>
@@ -258,7 +258,7 @@ export function LifecycleCard({ agent, policies, audit, treatments, gates, actio
       )}
 
       {agent.lastDecision?.decision === "reject" && !agent.review && (
-        <div style={{ marginTop: 10, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 8, padding: "8px 11px", fontSize: 12.5, color: T.warnBox.fg, lineHeight: 1.45 }}>
+        <div style={{ marginTop: 10, background: T.warnBox.bg, border: `1px solid ${T.warnBox.border}`, borderRadius: 12, padding: "8px 11px", fontSize: 12.5, color: T.warnBox.fg, lineHeight: 1.45 }}>
           Returned by {agent.lastDecision.by} on {agent.lastDecision.on}: {agent.lastDecision.reason}
         </div>
       )}
